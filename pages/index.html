@@ -317,6 +317,36 @@
     .status.CANCELLED { background: rgba(251, 191, 36, 0.2); color: #fde68a; }
     .status.RISK_REJECTED { background: rgba(244, 63, 94, 0.2); color: #fda4af; }
 
+    .usecases {
+      display: grid;
+      gap: 8px;
+      margin-top: 6px;
+    }
+
+    .skills {
+      margin-top: 8px;
+      display: grid;
+      gap: 8px;
+    }
+
+    .skill {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border: 1px solid #253652;
+      background: rgba(9, 15, 28, 0.88);
+      border-radius: 10px;
+      padding: 8px 10px;
+      font-size: 12px;
+      color: #c9d9f2;
+    }
+
+    .skill strong {
+      font-family: "Space Grotesk", sans-serif;
+      color: #a5f3fc;
+      font-size: 14px;
+    }
+
     @media (max-width: 1080px) {
       .grid { grid-template-columns: 1fr; }
       .tables { grid-template-columns: 1fr; }
@@ -387,6 +417,20 @@
             <input id="injectFault" type="checkbox" style="width:auto;padding:0;margin:0;" />
             <span>注入故障（下一筆單送入 DLQ）</span>
           </label>
+
+          <label>Idempotency Key
+            <input id="idemKey" type="text" placeholder="例如: ord-1001" />
+          </label>
+        </div>
+
+        <h2 style="margin-top:12px;">Kafka 用例場景</h2>
+        <div class="usecases">
+          <button id="scenarioStream" class="ghost">用例 1：即時行情串流 + 正規化</button>
+          <button id="scenarioIdem" class="ghost">用例 2：Idempotency / Duplicate 防重</button>
+          <button id="scenarioRiskReject" class="ghost">用例 3：Risk Reject</button>
+          <button id="scenarioDlqReplay" class="ghost">用例 4：DLQ + Replay</button>
+          <button id="scenarioRestart" class="ghost">用例 5：Consumer Restart 恢復</button>
+          <button id="scenarioSecurity" class="ghost">用例 6：存取控制 / Security Deny</button>
         </div>
 
         <div class="metrics">
@@ -396,6 +440,14 @@
           <div class="metric"><div class="k">Events</div><div class="v" id="mEvents">0</div></div>
           <div class="metric"><div class="k">Open</div><div class="v" id="mOpen">0</div></div>
           <div class="metric"><div class="k">PnL</div><div class="v" id="mPnl">0</div></div>
+        </div>
+
+        <h2 style="margin-top:6px;">技能證據指標</h2>
+        <div class="skills">
+          <div class="skill"><span>Duplicate 被阻擋</span><strong id="sDup">0</strong></div>
+          <div class="skill"><span>Consumer Restart 次數</span><strong id="sRestart">0</strong></div>
+          <div class="skill"><span>Security Deny 次數</span><strong id="sDenied">0</strong></div>
+          <div class="skill"><span>Replay 完成次數</span><strong id="sReplay">0</strong></div>
         </div>
 
         <h2 style="margin-top:8px;">事件流</h2>
@@ -422,6 +474,8 @@
             <div class="topic-chip" style="left:354px;top:260px;" id="count-risk-rejected">risk.rejected · 0</div>
             <div class="topic-chip" style="left:582px;top:125px;" id="count-execution-events">execution.events · 0</div>
             <div class="topic-chip" style="left:810px;top:125px;" id="count-portfolio-events">portfolio.events · 0</div>
+            <div class="topic-chip" style="left:36px;top:430px;" id="count-security-events">security.events · 0</div>
+            <div class="topic-chip" style="left:960px;top:430px;" id="count-consumer-events">consumer.events · 0</div>
             <div class="topic-chip" style="left:810px;top:318px;" id="count-deadletter-events">deadletter.events · 0</div>
             <div class="topic-chip" style="left:930px;top:318px;" id="count-replay-jobs">replay.jobs · 0</div>
 
@@ -433,6 +487,7 @@
             <div class="arrow" style="left:880px;top:190px;width:50px;"></div>
             <div class="arrow" style="left:560px;top:330px;width:140px;"></div>
             <div class="arrow" style="left:880px;top:362px;width:48px;"></div>
+            <div class="arrow" style="left:206px;top:380px;width:494px;"></div>
           </div>
         </div>
 
@@ -470,10 +525,12 @@
       "ACC-002": { maxNotional: 50000, maxOpenOrders: 5 },
     },
     orderSeq: 1,
+    replaySeq: 1,
     orders: [],
     positions: {},
     timeline: [],
     dlq: [],
+    idempotencyCache: {},
     topicCount: {
       "market.raw": 0,
       "market.normalized": 0,
@@ -482,6 +539,8 @@
       "risk.rejected": 0,
       "execution.events": 0,
       "portfolio.events": 0,
+      "security.events": 0,
+      "consumer.events": 0,
       "deadletter.events": 0,
       "replay.jobs": 0,
     },
@@ -489,6 +548,12 @@
     runningFeed: true,
     filledCount: 0,
     totalPnl: 0,
+    duplicateBlocked: 0,
+    consumerRestartCount: 0,
+    securityDeniedCount: 0,
+    replayDoneCount: 0,
+    blockedAccounts: new Set(["ACC-002"]),
+    executionPausedUntil: 0,
   };
 
   const stage = document.getElementById("flowStage");
@@ -505,6 +570,13 @@
     pnl: document.getElementById("mPnl"),
   };
 
+  const skillEls = {
+    dup: document.getElementById("sDup"),
+    restart: document.getElementById("sRestart"),
+    denied: document.getElementById("sDenied"),
+    replay: document.getElementById("sReplay"),
+  };
+
   const topicElMap = {
     "market.raw": document.getElementById("count-market-raw"),
     "market.normalized": document.getElementById("count-market-normalized"),
@@ -513,6 +585,8 @@
     "risk.rejected": document.getElementById("count-risk-rejected"),
     "execution.events": document.getElementById("count-execution-events"),
     "portfolio.events": document.getElementById("count-portfolio-events"),
+    "security.events": document.getElementById("count-security-events"),
+    "consumer.events": document.getElementById("count-consumer-events"),
     "deadletter.events": document.getElementById("count-deadletter-events"),
     "replay.jobs": document.getElementById("count-replay-jobs"),
   };
@@ -579,6 +653,14 @@
     metricEls.open.textContent = state.orders.filter(o => o.status === "OPEN").length;
     metricEls.pnl.textContent = state.totalPnl.toFixed(2);
     metricEls.pnl.style.color = state.totalPnl >= 0 ? "#86efac" : "#fda4af";
+    renderSkills();
+  }
+
+  function renderSkills() {
+    skillEls.dup.textContent = String(state.duplicateBlocked);
+    skillEls.restart.textContent = String(state.consumerRestartCount);
+    skillEls.denied.textContent = String(state.securityDeniedCount);
+    skillEls.replay.textContent = String(state.replayDoneCount);
   }
 
   function renderOrders() {
@@ -621,6 +703,8 @@
       animatePacket("execution", "query", "exec");
     }
     if (topic === "portfolio.events") animatePacket("portfolio", "query", "ledger");
+    if (topic === "security.events") animatePacket("order-api", "dlq", "deny", "reject");
+    if (topic === "consumer.events") animatePacket("execution", "query", "restart", "replay");
     if (topic === "deadletter.events") animatePacket(opts.from || "risk", "dlq", "DLQ", "dlq");
     if (topic === "replay.jobs") animatePacket("dlq", "risk", "replay", "replay");
   }
@@ -676,7 +760,12 @@
     renderPositions();
   }
 
+  function isExecutionPaused() {
+    return Date.now() < state.executionPausedUntil;
+  }
+
   function tryFill(order) {
+    if (isExecutionPaused()) return;
     const q = state.quotes[order.symbol];
     if (!q || order.status !== "OPEN") return;
 
@@ -693,21 +782,41 @@
     renderOrders();
   }
 
-  function createOrder() {
-    const accountId = document.getElementById("account").value;
-    const symbol = document.getElementById("symbol").value;
-    const side = document.getElementById("side").value;
-    const qty = Number(document.getElementById("qty").value || 0);
-    const price = Number(document.getElementById("price").value || 0);
+  function createOrder(opts = {}) {
+    const accountId = opts.accountId || document.getElementById("account").value;
+    const symbol = opts.symbol || document.getElementById("symbol").value;
+    const side = opts.side || document.getElementById("side").value;
+    const qty = Number(opts.qty ?? document.getElementById("qty").value || 0);
+    const price = Number(opts.price ?? document.getElementById("price").value || 0);
+    const idempotencyKey = (opts.idempotencyKey ?? document.getElementById("idemKey").value || "").trim();
 
     if (qty <= 0 || price <= 0) return;
 
-    const order = { orderId: idForOrder(), accountId, symbol, side, qty, price, status: "PENDING_RISK" };
+    if (state.blockedAccounts.has(accountId)) {
+      state.securityDeniedCount += 1;
+      emit("security.events", "security.access.denied", `${accountId} denied by ACL`);
+      const dead = { id: `DLQ-${Date.now()}`, payload: { accountId, symbol, side, qty, price }, from: "order-api" };
+      state.dlq.push(dead);
+      emit("deadletter.events", "deadletter.created", `${dead.id} auth denied`, { from: dead.from });
+      renderMetrics();
+      return;
+    }
+
+    if (idempotencyKey && state.idempotencyCache[idempotencyKey]) {
+      state.duplicateBlocked += 1;
+      const existing = state.idempotencyCache[idempotencyKey];
+      emit("order.commands", "order.duplicate.ignored", `${idempotencyKey} -> ${existing.orderId}`);
+      renderMetrics();
+      return;
+    }
+
+    const order = { orderId: idForOrder(), accountId, symbol, side, qty, price, status: "PENDING_RISK", idem: idempotencyKey };
     state.orders.push(order);
+    if (idempotencyKey) state.idempotencyCache[idempotencyKey] = order;
 
     emit("order.commands", "order.new.requested", `${order.orderId} ${side} ${symbol} x${qty}`);
 
-    if (document.getElementById("injectFault").checked) {
+    if (document.getElementById("injectFault").checked || opts.forceFault) {
       const dead = { id: `DLQ-${Date.now()}`, payload: { ...order }, from: "order-api" };
       state.dlq.push(dead);
       emit("deadletter.events", "deadletter.created", `${dead.id} injected`, { from: dead.from });
@@ -787,6 +896,8 @@
         emit("risk.accepted", "risk.accepted", `${recovered.orderId}`);
         emit("execution.events", "execution.order.opened", `${recovered.orderId}`);
         tryFill(recovered);
+        state.replayDoneCount += 1;
+        renderMetrics();
         renderOrders();
       }, idx * 300);
     });
@@ -814,9 +925,64 @@
     }, 120);
   }
 
+  function scenarioStream() {
+    pushEvent("market.raw", "scenario", "Use Case 1: real-time stream + normalize");
+    for (let i = 0; i < 6; i += 1) {
+      setTimeout(() => marketTick(), i * 220);
+    }
+    setTimeout(() => createOrder({ symbol: "AAPL", side: "BUY", qty: 5, price: state.quotes.AAPL.ask + 0.2 }), 500);
+  }
+
+  function scenarioIdempotency() {
+    const key = `idem-${Date.now()}`;
+    document.getElementById("idemKey").value = key;
+    pushEvent("order.commands", "scenario", `Use Case 2: idempotency key ${key}`);
+    createOrder({ symbol: "MSFT", side: "BUY", qty: 3, price: state.quotes.MSFT.ask + 0.2, idempotencyKey: key });
+    setTimeout(() => {
+      createOrder({ symbol: "MSFT", side: "BUY", qty: 3, price: state.quotes.MSFT.ask + 0.2, idempotencyKey: key });
+      document.getElementById("idemKey").value = "";
+    }, 260);
+  }
+
+  function scenarioRiskReject() {
+    pushEvent("risk.rejected", "scenario", "Use Case 3: breach max_notional");
+    createOrder({ accountId: "ACC-001", symbol: "NVDA", side: "BUY", qty: 300, price: state.quotes.NVDA.ask + 0.2 });
+  }
+
+  function scenarioDlqReplay() {
+    pushEvent("deadletter.events", "scenario", "Use Case 4: DLQ then replay", { from: "order-api" });
+    createOrder({ symbol: "TSLA", side: "BUY", qty: 4, price: state.quotes.TSLA.ask + 0.2, forceFault: true });
+    setTimeout(() => replayDlq(), 500);
+  }
+
+  function scenarioConsumerRestart() {
+    state.consumerRestartCount += 1;
+    state.executionPausedUntil = Date.now() + 3800;
+    emit("consumer.events", "consumer.restart.begin", "execution-service restarting...");
+    createOrder({ symbol: "AAPL", side: "BUY", qty: 6, price: state.quotes.AAPL.ask + 0.3 });
+    setTimeout(() => {
+      emit("consumer.events", "consumer.restart.done", "execution-service resumed");
+      state.orders.filter(o => o.status === "OPEN").forEach(tryFill);
+      renderOrders();
+      renderMetrics();
+    }, 3900);
+    renderMetrics();
+  }
+
+  function scenarioSecurity() {
+    emit("security.events", "security.policy.enabled", "ACC-002 blocked for trading");
+    createOrder({ accountId: "ACC-002", symbol: "AAPL", side: "BUY", qty: 2, price: state.quotes.AAPL.ask + 0.2 });
+  }
+
   document.getElementById("sendOrder").addEventListener("click", createOrder);
   document.getElementById("cancelLast").addEventListener("click", cancelLastOpenOrder);
   document.getElementById("replayDlq").addEventListener("click", replayDlq);
+  document.getElementById("scenarioStream").addEventListener("click", scenarioStream);
+  document.getElementById("scenarioIdem").addEventListener("click", scenarioIdempotency);
+  document.getElementById("scenarioRiskReject").addEventListener("click", scenarioRiskReject);
+  document.getElementById("scenarioDlqReplay").addEventListener("click", scenarioDlqReplay);
+  document.getElementById("scenarioRestart").addEventListener("click", scenarioConsumerRestart);
+  document.getElementById("scenarioSecurity").addEventListener("click", scenarioSecurity);
   document.getElementById("toggleFeed").addEventListener("click", (e) => {
     state.runningFeed = !state.runningFeed;
     e.target.textContent = state.runningFeed ? "暫停行情" : "恢復行情";

@@ -15,6 +15,14 @@
 - Replay DLQ
 - 即時顯示 topic 計數、事件流、orders view、positions/pnl
 
+Kafka 技能用例（一鍵場景）：
+- 用例 1：即時行情串流與正規化（Producer/Consumer）
+- 用例 2：Idempotency / Duplicate 防重
+- 用例 3：Risk Reject（風控規則）
+- 用例 4：DLQ + Replay（故障回復）
+- 用例 5：Consumer Restart 恢復（可觀察事件持續與補處理）
+- 用例 6：Security Deny（用戶存取控制）
+
 ## Cloud Hosting（免費、免信用卡）
 
 建議用 Hugging Face Docker Space（官方有免費 CPU Basic：2 vCPU、16GB RAM、50GB 磁碟）。
