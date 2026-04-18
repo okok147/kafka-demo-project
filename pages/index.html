@@ -347,6 +347,12 @@
       font-size: 14px;
     }
 
+    .hint {
+      color: #89a2c5;
+      font-size: 11px;
+      line-height: 1.5;
+    }
+
     @media (max-width: 1080px) {
       .grid { grid-template-columns: 1fr; }
       .tables { grid-template-columns: 1fr; }
@@ -421,6 +427,29 @@
           <label>Idempotency Key
             <input id="idemKey" type="text" placeholder="例如: ord-1001" />
           </label>
+
+          <h2 style="margin-top:4px;">隨機事件產生器</h2>
+          <div class="row2">
+            <label>事件速率（每秒）
+              <input id="genRate" type="number" min="1" max="200" value="18" />
+            </label>
+            <label>Burst 倍數
+              <input id="genBurst" type="number" min="1" max="10" value="2" />
+            </label>
+          </div>
+          <div class="row2">
+            <label>故障率（%）
+              <input id="genFault" type="number" min="0" max="100" value="15" />
+            </label>
+            <label>Consumer 吞吐（每秒）
+              <input id="consumerRate" type="number" min="1" max="200" value="12" />
+            </label>
+          </div>
+          <div class="row2">
+            <button id="toggleGenerator" class="primary">啟動隨機流</button>
+            <button id="injectSurge" class="ghost">注入事件尖峰</button>
+          </div>
+          <div class="hint">會隨機產生 market/order/cancel/security/restart 事件，並以佇列 + consumer 模擬 Kafka lag。</div>
         </div>
 
         <h2 style="margin-top:12px;">Kafka 用例場景</h2>
@@ -440,6 +469,12 @@
           <div class="metric"><div class="k">Events</div><div class="v" id="mEvents">0</div></div>
           <div class="metric"><div class="k">Open</div><div class="v" id="mOpen">0</div></div>
           <div class="metric"><div class="k">PnL</div><div class="v" id="mPnl">0</div></div>
+          <div class="metric"><div class="k">Queue Depth</div><div class="v" id="mQueue">0</div></div>
+          <div class="metric"><div class="k">Lag (ms)</div><div class="v" id="mLag">0</div></div>
+          <div class="metric"><div class="k">Ingest/s</div><div class="v" id="mIngest">0</div></div>
+          <div class="metric"><div class="k">Consume/s</div><div class="v" id="mConsume">0</div></div>
+          <div class="metric"><div class="k">Error %</div><div class="v" id="mErrRate">0</div></div>
+          <div class="metric"><div class="k">Generator</div><div class="v" id="mGenerator">OFF</div></div>
         </div>
 
         <h2 style="margin-top:6px;">技能證據指標</h2>
@@ -554,6 +589,24 @@
     replayDoneCount: 0,
     blockedAccounts: new Set(["ACC-002"]),
     executionPausedUntil: 0,
+    kafkaQueue: [],
+    generator: {
+      running: false,
+      producerRate: 18,
+      burst: 2,
+      faultRate: 0.15,
+      consumerRate: 12,
+      producerCarry: 0,
+      consumerCarry: 0,
+      lagMs: 0,
+      ingestPerSec: 0,
+      consumePerSec: 0,
+      errorRate: 0,
+      producedWindow: 0,
+      consumedWindow: 0,
+      failedWindow: 0,
+      lastRestartAt: 0,
+    },
   };
 
   const stage = document.getElementById("flowStage");
@@ -568,6 +621,12 @@
     events: document.getElementById("mEvents"),
     open: document.getElementById("mOpen"),
     pnl: document.getElementById("mPnl"),
+    queue: document.getElementById("mQueue"),
+    lag: document.getElementById("mLag"),
+    ingest: document.getElementById("mIngest"),
+    consume: document.getElementById("mConsume"),
+    error: document.getElementById("mErrRate"),
+    generator: document.getElementById("mGenerator"),
   };
 
   const skillEls = {
@@ -590,6 +649,14 @@
     "deadletter.events": document.getElementById("count-deadletter-events"),
     "replay.jobs": document.getElementById("count-replay-jobs"),
   };
+
+  function clamp(value, min, max) {
+    return Math.max(min, Math.min(max, value));
+  }
+
+  function randomPick(arr) {
+    return arr[Math.floor(Math.random() * arr.length)];
+  }
 
   function idForOrder() {
     const id = `SIM-${String(state.orderSeq).padStart(6, "0")}`;
@@ -653,6 +720,13 @@
     metricEls.open.textContent = state.orders.filter(o => o.status === "OPEN").length;
     metricEls.pnl.textContent = state.totalPnl.toFixed(2);
     metricEls.pnl.style.color = state.totalPnl >= 0 ? "#86efac" : "#fda4af";
+    metricEls.queue.textContent = String(state.kafkaQueue.length);
+    metricEls.lag.textContent = String(Math.round(state.generator.lagMs));
+    metricEls.ingest.textContent = state.generator.ingestPerSec.toFixed(1);
+    metricEls.consume.textContent = state.generator.consumePerSec.toFixed(1);
+    metricEls.error.textContent = `${(state.generator.errorRate * 100).toFixed(1)}%`;
+    metricEls.generator.textContent = state.generator.running ? "ON" : "OFF";
+    metricEls.generator.style.color = state.generator.running ? "#86efac" : "#fda4af";
     renderSkills();
   }
 
@@ -903,8 +977,8 @@
     });
   }
 
-  function marketTick() {
-    if (!state.runningFeed) return;
+  function marketTick(force = false) {
+    if (!state.runningFeed && !force) return;
     const symbols = Object.keys(state.quotes);
     const symbol = symbols[Math.floor(Math.random() * symbols.length)];
     const q = state.quotes[symbol];
@@ -923,6 +997,165 @@
       renderPositions();
       renderMetrics();
     }, 120);
+  }
+
+  function syncGeneratorConfigFromInputs() {
+    const producerRate = clamp(Number(document.getElementById("genRate").value || 0), 1, 200);
+    const burst = clamp(Number(document.getElementById("genBurst").value || 0), 1, 10);
+    const faultPercent = clamp(Number(document.getElementById("genFault").value || 0), 0, 100);
+    const consumerRate = clamp(Number(document.getElementById("consumerRate").value || 0), 1, 200);
+
+    state.generator.producerRate = producerRate;
+    state.generator.burst = burst;
+    state.generator.faultRate = faultPercent / 100;
+    state.generator.consumerRate = consumerRate;
+
+    document.getElementById("genRate").value = String(producerRate);
+    document.getElementById("genBurst").value = String(burst);
+    document.getElementById("genFault").value = String(faultPercent);
+    document.getElementById("consumerRate").value = String(consumerRate);
+  }
+
+  function randomOrderPayload(accountId = "ACC-001") {
+    const symbols = Object.keys(state.quotes);
+    const symbol = randomPick(symbols);
+    const side = Math.random() < 0.5 ? "BUY" : "SELL";
+    const q = state.quotes[symbol];
+    const qty = Math.floor(Math.random() * 8) + 1;
+    const price = side === "BUY"
+      ? Number((q.ask + (Math.random() * 0.45)).toFixed(2))
+      : Number((q.bid - (Math.random() * 0.45)).toFixed(2));
+    return { accountId, symbol, side, qty, price };
+  }
+
+  function enqueueKafkaEvent(kind, payload = {}, failed = false) {
+    state.kafkaQueue.push({
+      id: `Q-${Date.now()}-${Math.random().toString(16).slice(2, 7)}`,
+      kind,
+      payload,
+      enqueuedAt: Date.now(),
+    });
+    state.generator.producedWindow += 1;
+    if (failed) state.generator.failedWindow += 1;
+  }
+
+  function enqueueRandomEvent() {
+    const r = Math.random();
+    if (r < 0.34) {
+      enqueueKafkaEvent("market");
+      return;
+    }
+    if (r < 0.74) {
+      const forceFault = Math.random() < state.generator.faultRate;
+      enqueueKafkaEvent(forceFault ? "order_fault" : "order", randomOrderPayload(), forceFault);
+      return;
+    }
+    if (r < 0.84) {
+      enqueueKafkaEvent("cancel");
+      return;
+    }
+    if (r < 0.93) {
+      enqueueKafkaEvent("security", randomOrderPayload("ACC-002"), true);
+      return;
+    }
+    enqueueKafkaEvent("restart");
+  }
+
+  function processQueuedEvent(event) {
+    const lag = Date.now() - event.enqueuedAt;
+    state.generator.lagMs = state.generator.lagMs === 0 ? lag : ((state.generator.lagMs * 0.7) + (lag * 0.3));
+    state.generator.consumedWindow += 1;
+
+    if (event.kind === "market") {
+      marketTick(true);
+      return;
+    }
+    if (event.kind === "order") {
+      createOrder({ ...event.payload, idempotencyKey: "" });
+      return;
+    }
+    if (event.kind === "order_fault") {
+      createOrder({ ...event.payload, forceFault: true, idempotencyKey: "" });
+      return;
+    }
+    if (event.kind === "cancel") {
+      cancelLastOpenOrder();
+      return;
+    }
+    if (event.kind === "security") {
+      createOrder({ ...event.payload, accountId: "ACC-002", idempotencyKey: "" });
+      return;
+    }
+    if (event.kind === "restart") {
+      const now = Date.now();
+      if ((now - state.generator.lastRestartAt) > 12000) {
+        state.generator.lastRestartAt = now;
+        scenarioConsumerRestart();
+      } else {
+        marketTick(true);
+      }
+    }
+  }
+
+  function producerTick() {
+    if (!state.generator.running) return;
+    state.generator.producerCarry += state.generator.producerRate * 0.25;
+    let produceCount = Math.floor(state.generator.producerCarry);
+    state.generator.producerCarry -= produceCount;
+    produceCount += Math.floor(Math.random() * state.generator.burst);
+
+    for (let i = 0; i < produceCount; i += 1) enqueueRandomEvent();
+    renderMetrics();
+  }
+
+  function consumerTick() {
+    state.generator.consumerCarry += state.generator.consumerRate * 0.2;
+    let consumeCount = Math.floor(state.generator.consumerCarry);
+    state.generator.consumerCarry -= consumeCount;
+
+    while (consumeCount > 0 && state.kafkaQueue.length > 0) {
+      const event = state.kafkaQueue.shift();
+      processQueuedEvent(event);
+      consumeCount -= 1;
+    }
+
+    if (!state.generator.running && state.kafkaQueue.length === 0) {
+      state.generator.lagMs *= 0.85;
+      if (state.generator.lagMs < 1) state.generator.lagMs = 0;
+    }
+    renderMetrics();
+  }
+
+  function metricWindowTick() {
+    state.generator.ingestPerSec = state.generator.producedWindow;
+    state.generator.consumePerSec = state.generator.consumedWindow;
+    state.generator.errorRate = state.generator.producedWindow === 0
+      ? 0
+      : (state.generator.failedWindow / state.generator.producedWindow);
+    state.generator.producedWindow = 0;
+    state.generator.consumedWindow = 0;
+    state.generator.failedWindow = 0;
+    renderMetrics();
+  }
+
+  function toggleGenerator() {
+    syncGeneratorConfigFromInputs();
+    state.generator.running = !state.generator.running;
+    document.getElementById("toggleGenerator").textContent = state.generator.running ? "停止隨機流" : "啟動隨機流";
+    emit(
+      "consumer.events",
+      state.generator.running ? "generator.start" : "generator.stop",
+      `rate=${state.generator.producerRate}/s consume=${state.generator.consumerRate}/s fault=${Math.round(state.generator.faultRate * 100)}%`
+    );
+    renderMetrics();
+  }
+
+  function injectSurge() {
+    syncGeneratorConfigFromInputs();
+    const burstCount = state.generator.producerRate * 2;
+    for (let i = 0; i < burstCount; i += 1) enqueueRandomEvent();
+    emit("consumer.events", "generator.surge.injected", `queued +${burstCount} events`);
+    renderMetrics();
   }
 
   function scenarioStream() {
@@ -983,12 +1216,24 @@
   document.getElementById("scenarioDlqReplay").addEventListener("click", scenarioDlqReplay);
   document.getElementById("scenarioRestart").addEventListener("click", scenarioConsumerRestart);
   document.getElementById("scenarioSecurity").addEventListener("click", scenarioSecurity);
+  document.getElementById("toggleGenerator").addEventListener("click", toggleGenerator);
+  document.getElementById("injectSurge").addEventListener("click", injectSurge);
+  ["genRate", "genBurst", "genFault", "consumerRate"].forEach((id) => {
+    document.getElementById(id).addEventListener("change", () => {
+      syncGeneratorConfigFromInputs();
+      renderMetrics();
+    });
+  });
   document.getElementById("toggleFeed").addEventListener("click", (e) => {
     state.runningFeed = !state.runningFeed;
     e.target.textContent = state.runningFeed ? "暫停行情" : "恢復行情";
   });
 
+  syncGeneratorConfigFromInputs();
   setInterval(marketTick, 1100);
+  setInterval(producerTick, 250);
+  setInterval(consumerTick, 200);
+  setInterval(metricWindowTick, 1000);
   renderOrders();
   renderPositions();
   renderMetrics();

@@ -13,7 +13,8 @@
 - 取消最後 OPEN 訂單
 - 注入故障到 DLQ
 - Replay DLQ
-- 即時顯示 topic 計數、事件流、orders view、positions/pnl
+- 隨機事件產生器（可調事件速率、burst、故障率、consumer 吞吐）
+- 即時顯示 topic 計數、事件流、orders view、positions/pnl、queue depth、lag、ingest/consume 速率
 
 Kafka 技能用例（一鍵場景）：
 - 用例 1：即時行情串流與正規化（Producer/Consumer）
