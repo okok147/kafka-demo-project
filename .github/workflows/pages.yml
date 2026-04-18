@@ -17,26 +17,49 @@ jobs:
       - name: Prepare site
         run: |
           mkdir -p site
-          cp README.md site/index.md
-          cat > site/index.html <<'HTML'
+          cat > site/index.html <<HTML
           <!DOCTYPE html>
           <html lang="zh-Hant">
           <head>
             <meta charset="UTF-8" />
             <meta name="viewport" content="width=device-width, initial-scale=1" />
-            <title>Kafka Demo Website</title>
+            <title>Kafka Demo Project</title>
             <style>
-              body{font-family:"Noto Sans TC",sans-serif;margin:0;background:#0f172a;color:#e2e8f0;}
-              .wrap{max-width:900px;margin:40px auto;padding:24px;background:#1e293b;border-radius:16px;}
-              a{color:#7dd3fc;}
+              body{font-family:"Noto Sans TC",sans-serif;margin:0;background:#0b1220;color:#e5e7eb;}
+              .wrap{max-width:980px;margin:40px auto;padding:24px;background:#111827;border-radius:14px;border:1px solid #334155;}
+              .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+              .card{background:#0f172a;border:1px solid #1f2937;border-radius:10px;padding:14px}
+              .muted{color:#94a3b8}
+              code{background:#0b1020;padding:2px 6px;border-radius:6px}
+              a{color:#7dd3fc}
             </style>
           </head>
           <body>
             <div class="wrap">
-              <h1>Kafka Trading Demo</h1>
-              <p>此 repo 已建立可運行的 Kafka + Postgres 事件驅動交易示範。</p>
-              <p>本地完整 Dashboard：<code>http://localhost:8080</code></p>
-              <p>啟動方式：<code>docker compose up --build</code></p>
+              <h1>Kafka Demo Project</h1>
+              <p>事件驅動交易系統示範（Work Package 0-9）。</p>
+              <p class="muted">Last deploy commit: <code>${GITHUB_SHA}</code></p>
+              <p class="muted">Updated at (UTC): <code>$(date -u +"%Y-%m-%d %H:%M:%S")</code></p>
+
+              <div class="grid">
+                <div class="card">
+                  <h3>免費模式</h3>
+                  <p>Simulation Backend（不需真 Kafka/Postgres）</p>
+                  <p><code>PYTHONPATH=src python3 -m kafka_demo.entrypoints.sim_server</code></p>
+                </div>
+                <div class="card">
+                  <h3>完整本地模式</h3>
+                  <p>Docker Compose 全服務</p>
+                  <p><code>docker compose up --build</code></p>
+                </div>
+                <div class="card">
+                  <h3>主要入口</h3>
+                  <p>Dashboard/API: <code>/</code>、<code>/dashboard</code></p>
+                  <p>Order API: <code>POST /orders</code>、<code>POST /orders/{id}/cancel</code></p>
+                </div>
+              </div>
+
+              <p style="margin-top:18px"><a href="https://github.com/okok147/kafka-demo-project">View Repository</a></p>
             </div>
           </body>
           </html>
