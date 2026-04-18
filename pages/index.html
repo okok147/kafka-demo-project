@@ -786,9 +786,9 @@
     const accountId = opts.accountId || document.getElementById("account").value;
     const symbol = opts.symbol || document.getElementById("symbol").value;
     const side = opts.side || document.getElementById("side").value;
-    const qty = Number(opts.qty ?? document.getElementById("qty").value || 0);
-    const price = Number(opts.price ?? document.getElementById("price").value || 0);
-    const idempotencyKey = (opts.idempotencyKey ?? document.getElementById("idemKey").value || "").trim();
+    const qty = Number((opts.qty ?? document.getElementById("qty").value) || 0);
+    const price = Number((opts.price ?? document.getElementById("price").value) || 0);
+    const idempotencyKey = String((opts.idempotencyKey ?? document.getElementById("idemKey").value) || "").trim();
 
     if (qty <= 0 || price <= 0) return;
 
