@@ -146,6 +146,24 @@ def _try_fill(order_id: str, producer) -> None:
 
 
 
+def _try_fill_symbol(symbol: str, producer) -> None:
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT order_id
+                FROM open_orders
+                WHERE symbol=%s
+                ORDER BY created_at ASC
+                """,
+                (symbol,),
+            )
+            rows = cur.fetchall()
+
+    for row in rows:
+        _try_fill(row[0], producer)
+
+
 def run() -> None:
     consumer = build_consumer("execution-service", [RISK_ACCEPTED, MARKET_NORMALIZED])
     producer = build_producer()
@@ -166,6 +184,7 @@ def run() -> None:
                         bid=Decimal(str(event.payload["bid"])),
                         ask=Decimal(str(event.payload["ask"])),
                     )
+                    _try_fill_symbol(event.payload["symbol"], producer)
                     continue
 
                 if event.payload.get("command_type") == "NEW":

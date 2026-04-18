@@ -1,6 +1,7 @@
 import json
 
 from kafka_demo.common.db import get_conn
+from kafka_demo.common.dlq_payload import normalize_deadletter_payload
 from kafka_demo.common.kafka_client import build_consumer
 from kafka_demo.common.serde import deserialize_envelope
 from kafka_demo.common.topics import DEADLETTER_EVENTS
@@ -19,6 +20,7 @@ def run() -> None:
 
             event = deserialize_envelope(msg.value())
             payload = event.payload
+            normalized = normalize_deadletter_payload(payload.get("event_payload"))
 
             with get_conn() as conn:
                 with conn.cursor() as cur:
@@ -31,7 +33,7 @@ def run() -> None:
                             payload["source_service"],
                             payload["original_topic"],
                             payload.get("event_key"),
-                            json.dumps(payload.get("event_payload")),
+                            json.dumps(normalized, separators=(",", ":")),
                             payload["error_message"],
                         ),
                     )

@@ -1,6 +1,7 @@
 import json
 
 from kafka_demo.common.db import get_conn
+from kafka_demo.common.dlq_payload import encode_payload_for_replay
 from kafka_demo.common.event_bus import publish_deadletter
 from kafka_demo.common.kafka_client import build_consumer, build_producer
 from kafka_demo.common.serde import deserialize_envelope
@@ -18,13 +19,13 @@ def _run_job(payload: dict, producer) -> None:
 
             if deadletter_id:
                 cur.execute(
-                    "SELECT id, original_topic, event_key, event_payload::text FROM deadletter_events WHERE id=%s AND replayed=false",
+                    "SELECT id, original_topic, event_key, event_payload FROM deadletter_events WHERE id=%s AND replayed=false",
                     (deadletter_id,),
                 )
             else:
                 cur.execute(
                     """
-                    SELECT id, original_topic, event_key, event_payload::text
+                    SELECT id, original_topic, event_key, event_payload
                     FROM deadletter_events
                     WHERE replayed=false
                     ORDER BY id ASC
@@ -35,8 +36,8 @@ def _run_job(payload: dict, producer) -> None:
             rows = cur.fetchall()
 
             for row in rows:
-                evt_id, topic, key, payload_txt = row
-                producer.produce(topic, key=key, value=payload_txt.encode("utf-8"))
+                evt_id, topic, key, payload_obj = row
+                producer.produce(topic, key=key, value=encode_payload_for_replay(payload_obj))
                 cur.execute("UPDATE deadletter_events SET replayed=true WHERE id=%s", (evt_id,))
 
             producer.flush(10)

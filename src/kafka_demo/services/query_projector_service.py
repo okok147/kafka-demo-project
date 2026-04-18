@@ -170,3 +170,48 @@ def create_replay_job(deadletter_event_id: int | None = None, requested_by: str 
     )
     publish_event(producer, evt)
     return {"job_id": job_id, "status": "PENDING"}
+
+
+@app.get("/replay/jobs")
+def list_replay_jobs(limit: int = 100):
+    rows = fetch_all(
+        """
+        SELECT job_id::text, status, requested_by, deadletter_event_id, created_at::text, finished_at::text, COALESCE(error, '') AS error
+        FROM replay_jobs
+        ORDER BY created_at DESC
+        LIMIT %s
+        """,
+        (limit,),
+    )
+    return rows
+
+
+@app.get("/replay/deadletters")
+def list_deadletters(limit: int = 100, replayed: bool | None = None):
+    if replayed is None:
+        rows = fetch_all(
+            """
+            SELECT id, source_service, original_topic, event_key, replayed, error_message, created_at::text
+            FROM deadletter_events
+            ORDER BY id DESC
+            LIMIT %s
+            """,
+            (limit,),
+        )
+    else:
+        rows = fetch_all(
+            """
+            SELECT id, source_service, original_topic, event_key, replayed, error_message, created_at::text
+            FROM deadletter_events
+            WHERE replayed=%s
+            ORDER BY id DESC
+            LIMIT %s
+            """,
+            (replayed, limit),
+        )
+    return rows
+
+
+@app.post("/replay/deadletters/{deadletter_event_id}")
+def manual_replay_deadletter(deadletter_event_id: int, requested_by: str = "manual"):
+    return create_replay_job(deadletter_event_id=deadletter_event_id, requested_by=requested_by)

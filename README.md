@@ -36,6 +36,7 @@
 - Open orders table: `open_orders`
 - Quote cache: `quote_cache`
 - Fill simulator: execution worker
+- Market tick 觸發重試成交：新 `market.normalized` 會掃描該 symbol 未成交單
 - Cancel logic: cancel vs cancel-after-fill
 
 ### Work Package 6：Portfolio
@@ -56,6 +57,7 @@
 - Replay jobs table: `replay_jobs`
 - Replay runner: `replay-runner`
 - Deadletter topic/handler: `deadletter.events` + `deadletter-handler`
+- Manual replay API: `POST /replay/deadletters/{id}`
 - Manual replay: `scripts/manual_replay.py`
 
 ### Work Package 9：Tests
@@ -64,6 +66,7 @@
 - `tests/test_consumer_restart.py`
 - `tests/test_replay_rebuild.py`
 - `tests/test_cancel_after_fill.py`
+- `tests/test_dlq_payload.py`
 
 ## 啟動
 
@@ -97,6 +100,12 @@ curl -X POST http://localhost:8000/orders/<order_id>/cancel \
 
 ```bash
 curl -X POST 'http://localhost:8080/replay/jobs?requested_by=ops&deadletter_event_id=1'
+```
+
+### 手動重播單一 deadletter
+
+```bash
+curl -X POST 'http://localhost:8080/replay/deadletters/1?requested_by=ops'
 ```
 
 ## 本地測試
