@@ -2,6 +2,19 @@
 
 這是一個以 Kafka 事件驅動為核心的交易系統示範，覆蓋你列出的 Work Package 0-9。
 
+## Visualization Demo（GitHub Pages）
+
+線上動畫頁（Kafka event distribution + orderflow）：
+
+- https://okok147.github.io/kafka-demo-project/
+
+互動功能：
+- 送出 BUY/SELL 訂單
+- 取消最後 OPEN 訂單
+- 注入故障到 DLQ
+- Replay DLQ
+- 即時顯示 topic 計數、事件流、orders view、positions/pnl
+
 ## Cloud Hosting（免費、免信用卡）
 
 建議用 Hugging Face Docker Space（官方有免費 CPU Basic：2 vCPU、16GB RAM、50GB 磁碟）。

@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Kafka Orderflow Visual Simulation</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #070b14;
+      --panel: #0f1726;
+      --panel-2: #111c2f;
+      --line: #25324a;
+      --text: #e8eef8;
+      --muted: #9aadc9;
+      --accent: #34d399;
+      --warn: #f59e0b;
+      --bad: #f43f5e;
+      --good: #22c55e;
+      --cyan: #22d3ee;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: radial-gradient(1100px 550px at 80% -10%, #173150 0%, var(--bg) 56%);
+      color: var(--text);
+      font-family: "Noto Sans TC", sans-serif;
+      min-height: 100vh;
+    }
+
+    .shell {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 22px;
+    }
+
+    .top {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: flex-start;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+
+    .title {
+      margin: 0;
+      font-family: "Space Grotesk", sans-serif;
+      letter-spacing: 0.02em;
+      font-size: clamp(24px, 3vw, 42px);
+    }
+
+    .sub {
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      border: 1px solid var(--line);
+      background: rgba(8, 15, 26, 0.7);
+      padding: 8px 12px;
+      border-radius: 999px;
+      color: #d8e4f8;
+      font-size: 12px;
+      margin-left: 8px;
+    }
+
+    .tag strong { color: var(--cyan); font-family: "Space Grotesk", sans-serif; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 340px 1fr;
+      gap: 16px;
+    }
+
+    .panel {
+      background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 14px;
+      box-shadow: 0 14px 32px rgba(1, 4, 10, 0.5);
+    }
+
+    .panel h2 {
+      font-size: 14px;
+      margin: 0 0 12px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: #dce9ff;
+      font-family: "Space Grotesk", sans-serif;
+    }
+
+    .controls {
+      display: grid;
+      gap: 10px;
+    }
+
+    .controls label {
+      display: grid;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    input, select, button {
+      width: 100%;
+      border-radius: 10px;
+      border: 1px solid #31405d;
+      background: #0b1322;
+      color: var(--text);
+      font-family: "Space Grotesk", "Noto Sans TC", sans-serif;
+      padding: 10px;
+      font-size: 14px;
+    }
+
+    button {
+      cursor: pointer;
+      font-weight: 700;
+      transition: transform 120ms ease, border-color 120ms ease;
+    }
+
+    button:hover { transform: translateY(-1px); border-color: #5f7ca8; }
+    button.primary { background: linear-gradient(120deg, #1d9bf0, #10b981); border: none; color: #00131d; }
+    button.warn { background: linear-gradient(120deg, #ef4444, #f59e0b); border: none; color: #250100; }
+    button.ghost { background: #121b2f; }
+
+    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(100px, 1fr));
+      gap: 10px;
+      margin: 10px 0 14px;
+    }
+
+    .metric {
+      background: rgba(10, 18, 33, 0.8);
+      border: 1px solid #21314d;
+      border-radius: 10px;
+      padding: 10px;
+    }
+
+    .metric .k {
+      font-size: 11px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .metric .v {
+      margin-top: 6px;
+      font-family: "Space Grotesk", sans-serif;
+      font-size: 21px;
+      font-weight: 700;
+    }
+
+    .stream {
+      display: grid;
+      gap: 8px;
+      max-height: 220px;
+      overflow: auto;
+      padding-right: 4px;
+    }
+
+    .event-item {
+      border: 1px solid #243652;
+      border-radius: 10px;
+      padding: 9px;
+      background: rgba(9, 15, 28, 0.85);
+      font-size: 12px;
+    }
+
+    .event-item .topline {
+      display: flex;
+      justify-content: space-between;
+      gap: 6px;
+      font-family: "Space Grotesk", sans-serif;
+      margin-bottom: 4px;
+      color: #cbe2ff;
+    }
+
+    .event-item .topic { color: var(--cyan); }
+
+    .flow-wrap {
+      overflow-x: auto;
+      padding-bottom: 8px;
+    }
+
+    .flow-stage {
+      width: 1200px;
+      height: 520px;
+      position: relative;
+      background:
+        radial-gradient(400px 180px at 20% 0%, rgba(31, 78, 122, 0.3), transparent 60%),
+        linear-gradient(180deg, #0c1526 0%, #0b1220 100%);
+      border: 1px solid #273956;
+      border-radius: 14px;
+      overflow: hidden;
+    }
+
+    .node {
+      position: absolute;
+      width: 180px;
+      padding: 12px;
+      border-radius: 12px;
+      border: 1px solid #2b3f61;
+      background: rgba(16, 26, 42, 0.96);
+      box-shadow: inset 0 0 0 1px rgba(148, 199, 255, 0.05);
+    }
+
+    .node .t {
+      font-size: 11px;
+      color: #8ca7cc;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 4px;
+    }
+
+    .node .n {
+      font-family: "Space Grotesk", sans-serif;
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+
+    .topic-chip {
+      position: absolute;
+      font-size: 11px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px dashed #2b5e80;
+      color: #a2d6ff;
+      background: rgba(14, 36, 56, 0.5);
+      font-family: "Space Grotesk", sans-serif;
+      white-space: nowrap;
+    }
+
+    .arrow {
+      position: absolute;
+      border-top: 1px dashed #35557a;
+      opacity: 0.7;
+    }
+
+    .arrow::after {
+      content: "";
+      position: absolute;
+      right: -6px;
+      top: -4px;
+      border-left: 7px solid #3e6da2;
+      border-top: 4px solid transparent;
+      border-bottom: 4px solid transparent;
+    }
+
+    .packet {
+      position: absolute;
+      z-index: 40;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      font-family: "Space Grotesk", sans-serif;
+      pointer-events: none;
+      box-shadow: 0 0 18px rgba(97, 211, 255, 0.55);
+      transition: transform 860ms cubic-bezier(.2,.72,.24,1), opacity 860ms ease;
+      opacity: 0.95;
+      color: #00121e;
+      background: linear-gradient(120deg, #67e8f9, #22c55e);
+      transform: translate(0,0);
+    }
+
+    .packet.reject { background: linear-gradient(120deg, #f87171, #fb7185); box-shadow: 0 0 16px rgba(248, 113, 113, 0.5); }
+    .packet.dlq { background: linear-gradient(120deg, #f59e0b, #ef4444); box-shadow: 0 0 16px rgba(245, 158, 11, 0.45); }
+    .packet.replay { background: linear-gradient(120deg, #d8b4fe, #60a5fa); box-shadow: 0 0 16px rgba(168, 139, 250, 0.45); }
+
+    .tables {
+      margin-top: 14px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+
+    th, td {
+      border-bottom: 1px solid #243552;
+      padding: 7px;
+      text-align: left;
+      white-space: nowrap;
+    }
+
+    th { color: #9bb2d3; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
+
+    .status {
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-family: "Space Grotesk", sans-serif;
+      font-weight: 700;
+      font-size: 10px;
+      display: inline-block;
+    }
+
+    .status.OPEN, .status.RISK_ACCEPTED, .status.PENDING_RISK { background: rgba(56, 189, 248, 0.18); color: #67e8f9; }
+    .status.FILLED { background: rgba(34, 197, 94, 0.2); color: #86efac; }
+    .status.CANCELLED { background: rgba(251, 191, 36, 0.2); color: #fde68a; }
+    .status.RISK_REJECTED { background: rgba(244, 63, 94, 0.2); color: #fda4af; }
+
+    @media (max-width: 1080px) {
+      .grid { grid-template-columns: 1fr; }
+      .tables { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="top">
+      <div>
+        <h1 class="title">Kafka Orderflow Visual Simulation</h1>
+        <div class="sub">純前端模擬 Kafka 事件分發與訂單流轉（無付費後端）</div>
+      </div>
+      <div>
+        <span class="tag"><strong>Build</strong> __GITHUB_SHA__</span>
+        <span class="tag"><strong>Updated</strong> __BUILD_TIME__</span>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="panel">
+        <h2>控制台</h2>
+        <div class="controls">
+          <div class="row2">
+            <label>帳戶
+              <select id="account">
+                <option>ACC-001</option>
+                <option>ACC-002</option>
+              </select>
+            </label>
+            <label>商品
+              <select id="symbol">
+                <option>AAPL</option>
+                <option>MSFT</option>
+                <option>TSLA</option>
+                <option>NVDA</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="row2">
+            <label>方向
+              <select id="side">
+                <option>BUY</option>
+                <option>SELL</option>
+              </select>
+            </label>
+            <label>數量
+              <input id="qty" type="number" min="1" value="10" />
+            </label>
+          </div>
+
+          <label>限價
+            <input id="price" type="number" min="1" step="0.01" value="200" />
+          </label>
+
+          <div class="row2">
+            <button id="sendOrder" class="primary">送出新單</button>
+            <button id="cancelLast" class="warn">取消最後 OPEN 單</button>
+          </div>
+
+          <div class="row2">
+            <button id="toggleFeed" class="ghost">暫停行情</button>
+            <button id="replayDlq" class="ghost">Replay DLQ</button>
+          </div>
+
+          <label style="display:flex;align-items:center;gap:8px;grid-template-columns:none;">
+            <input id="injectFault" type="checkbox" style="width:auto;padding:0;margin:0;" />
+            <span>注入故障（下一筆單送入 DLQ）</span>
+          </label>
+        </div>
+
+        <div class="metrics">
+          <div class="metric"><div class="k">Orders</div><div class="v" id="mOrders">0</div></div>
+          <div class="metric"><div class="k">Filled</div><div class="v" id="mFilled">0</div></div>
+          <div class="metric"><div class="k">DLQ</div><div class="v" id="mDlq">0</div></div>
+          <div class="metric"><div class="k">Events</div><div class="v" id="mEvents">0</div></div>
+          <div class="metric"><div class="k">Open</div><div class="v" id="mOpen">0</div></div>
+          <div class="metric"><div class="k">PnL</div><div class="v" id="mPnl">0</div></div>
+        </div>
+
+        <h2 style="margin-top:8px;">事件流</h2>
+        <div class="stream" id="eventStream"></div>
+      </div>
+
+      <div class="panel">
+        <h2>Kafka Event Distribution & Orderflow</h2>
+        <div class="flow-wrap">
+          <div class="flow-stage" id="flowStage">
+            <div class="node" data-node="market-sim" style="left:26px; top:48px;"><div class="t">Producer</div><div class="n">Market Data Simulator</div></div>
+            <div class="node" data-node="normalizer" style="left:242px; top:48px;"><div class="t">Consumer + Producer</div><div class="n">Market Normalizer</div></div>
+            <div class="node" data-node="order-api" style="left:26px; top:260px;"><div class="t">API Gateway</div><div class="n">Order API</div></div>
+            <div class="node" data-node="risk" style="left:242px; top:260px;"><div class="t">Risk Engine</div><div class="n">Risk Service</div></div>
+            <div class="node" data-node="execution" style="left:470px; top:155px;"><div class="t">Matching</div><div class="n">Execution Service</div></div>
+            <div class="node" data-node="portfolio" style="left:700px; top:155px;"><div class="t">Ledger</div><div class="n">Portfolio Service</div></div>
+            <div class="node" data-node="query" style="left:928px; top:155px;"><div class="t">Projection</div><div class="n">Query Projector</div></div>
+            <div class="node" data-node="dlq" style="left:700px; top:350px;"><div class="t">Recovery</div><div class="n">DLQ + Replay</div></div>
+
+            <div class="topic-chip" style="left:130px;top:16px;" id="count-market-raw">market.raw · 0</div>
+            <div class="topic-chip" style="left:354px;top:16px;" id="count-market-normalized">market.normalized · 0</div>
+            <div class="topic-chip" style="left:130px;top:228px;" id="count-order-commands">order.commands · 0</div>
+            <div class="topic-chip" style="left:354px;top:228px;" id="count-risk-accepted">risk.accepted · 0</div>
+            <div class="topic-chip" style="left:354px;top:260px;" id="count-risk-rejected">risk.rejected · 0</div>
+            <div class="topic-chip" style="left:582px;top:125px;" id="count-execution-events">execution.events · 0</div>
+            <div class="topic-chip" style="left:810px;top:125px;" id="count-portfolio-events">portfolio.events · 0</div>
+            <div class="topic-chip" style="left:810px;top:318px;" id="count-deadletter-events">deadletter.events · 0</div>
+            <div class="topic-chip" style="left:930px;top:318px;" id="count-replay-jobs">replay.jobs · 0</div>
+
+            <div class="arrow" style="left:206px;top:84px;width:36px;"></div>
+            <div class="arrow" style="left:206px;top:296px;width:36px;"></div>
+            <div class="arrow" style="left:422px;top:84px;width:48px;transform:rotate(20deg);transform-origin:left center;"></div>
+            <div class="arrow" style="left:422px;top:296px;width:48px;transform:rotate(-20deg);transform-origin:left center;"></div>
+            <div class="arrow" style="left:650px;top:190px;width:50px;"></div>
+            <div class="arrow" style="left:880px;top:190px;width:50px;"></div>
+            <div class="arrow" style="left:560px;top:330px;width:140px;"></div>
+            <div class="arrow" style="left:880px;top:362px;width:48px;"></div>
+          </div>
+        </div>
+
+        <div class="tables">
+          <div>
+            <h2>Orders View</h2>
+            <table>
+              <thead><tr><th>Order ID</th><th>Acct</th><th>Sym</th><th>Side</th><th>Status</th></tr></thead>
+              <tbody id="ordersBody"></tbody>
+            </table>
+          </div>
+          <div>
+            <h2>Positions / PnL</h2>
+            <table>
+              <thead><tr><th>Acct</th><th>Sym</th><th>Qty</th><th>Avg</th><th>UPnL</th></tr></thead>
+              <tbody id="positionsBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  const state = {
+    quotes: {
+      AAPL: { bid: 199.8, ask: 200.0 },
+      MSFT: { bid: 409.8, ask: 410.0 },
+      TSLA: { bid: 174.8, ask: 175.0 },
+      NVDA: { bid: 919.8, ask: 920.0 },
+    },
+    limits: {
+      "ACC-001": { maxNotional: 200000, maxOpenOrders: 20 },
+      "ACC-002": { maxNotional: 50000, maxOpenOrders: 5 },
+    },
+    orderSeq: 1,
+    orders: [],
+    positions: {},
+    timeline: [],
+    dlq: [],
+    topicCount: {
+      "market.raw": 0,
+      "market.normalized": 0,
+      "order.commands": 0,
+      "risk.accepted": 0,
+      "risk.rejected": 0,
+      "execution.events": 0,
+      "portfolio.events": 0,
+      "deadletter.events": 0,
+      "replay.jobs": 0,
+    },
+    totalEvents: 0,
+    runningFeed: true,
+    filledCount: 0,
+    totalPnl: 0,
+  };
+
+  const stage = document.getElementById("flowStage");
+  const eventStream = document.getElementById("eventStream");
+  const ordersBody = document.getElementById("ordersBody");
+  const positionsBody = document.getElementById("positionsBody");
+
+  const metricEls = {
+    orders: document.getElementById("mOrders"),
+    filled: document.getElementById("mFilled"),
+    dlq: document.getElementById("mDlq"),
+    events: document.getElementById("mEvents"),
+    open: document.getElementById("mOpen"),
+    pnl: document.getElementById("mPnl"),
+  };
+
+  const topicElMap = {
+    "market.raw": document.getElementById("count-market-raw"),
+    "market.normalized": document.getElementById("count-market-normalized"),
+    "order.commands": document.getElementById("count-order-commands"),
+    "risk.accepted": document.getElementById("count-risk-accepted"),
+    "risk.rejected": document.getElementById("count-risk-rejected"),
+    "execution.events": document.getElementById("count-execution-events"),
+    "portfolio.events": document.getElementById("count-portfolio-events"),
+    "deadletter.events": document.getElementById("count-deadletter-events"),
+    "replay.jobs": document.getElementById("count-replay-jobs"),
+  };
+
+  function idForOrder() {
+    const id = `SIM-${String(state.orderSeq).padStart(6, "0")}`;
+    state.orderSeq += 1;
+    return id;
+  }
+
+  function animatePacket(fromId, toId, label, cls = "") {
+    const from = stage.querySelector(`[data-node='${fromId}']`);
+    const to = stage.querySelector(`[data-node='${toId}']`);
+    if (!from || !to) return;
+
+    const stageRect = stage.getBoundingClientRect();
+    const fromRect = from.getBoundingClientRect();
+    const toRect = to.getBoundingClientRect();
+
+    const startX = fromRect.left - stageRect.left + fromRect.width / 2;
+    const startY = fromRect.top - stageRect.top + fromRect.height / 2;
+    const endX = toRect.left - stageRect.left + toRect.width / 2;
+    const endY = toRect.top - stageRect.top + toRect.height / 2;
+
+    const p = document.createElement("div");
+    p.className = `packet ${cls}`.trim();
+    p.textContent = label;
+    p.style.left = `${startX}px`;
+    p.style.top = `${startY}px`;
+    stage.appendChild(p);
+
+    requestAnimationFrame(() => {
+      p.style.transform = `translate(${endX - startX}px, ${endY - startY}px)`;
+      p.style.opacity = "0.12";
+    });
+    setTimeout(() => p.remove(), 920);
+  }
+
+  function pushEvent(topic, type, detail = "", cls = "") {
+    state.topicCount[topic] = (state.topicCount[topic] || 0) + 1;
+    state.totalEvents += 1;
+
+    const line = document.createElement("div");
+    line.className = "event-item";
+    line.innerHTML = `
+      <div class="topline"><span class="topic">${topic}</span><span>${type}</span></div>
+      <div>${detail}</div>
+    `;
+    eventStream.prepend(line);
+    while (eventStream.children.length > 42) eventStream.lastChild.remove();
+
+    if (topicElMap[topic]) {
+      topicElMap[topic].textContent = `${topic} · ${state.topicCount[topic]}`;
+    }
+
+    renderMetrics();
+  }
+
+  function renderMetrics() {
+    metricEls.orders.textContent = state.orders.length;
+    metricEls.filled.textContent = state.filledCount;
+    metricEls.dlq.textContent = state.dlq.length;
+    metricEls.events.textContent = state.totalEvents;
+    metricEls.open.textContent = state.orders.filter(o => o.status === "OPEN").length;
+    metricEls.pnl.textContent = state.totalPnl.toFixed(2);
+    metricEls.pnl.style.color = state.totalPnl >= 0 ? "#86efac" : "#fda4af";
+  }
+
+  function renderOrders() {
+    const rows = [...state.orders].reverse().slice(0, 20);
+    ordersBody.innerHTML = rows.map(o => `
+      <tr>
+        <td>${o.orderId}</td>
+        <td>${o.accountId}</td>
+        <td>${o.symbol}</td>
+        <td>${o.side}</td>
+        <td><span class="status ${o.status}">${o.status}</span></td>
+      </tr>
+    `).join("");
+  }
+
+  function renderPositions() {
+    const rows = Object.values(state.positions);
+    positionsBody.innerHTML = rows.map(p => `
+      <tr>
+        <td>${p.accountId}</td>
+        <td>${p.symbol}</td>
+        <td>${p.qty.toFixed(2)}</td>
+        <td>${p.avg.toFixed(2)}</td>
+        <td style="color:${p.upnl >= 0 ? "#86efac" : "#fda4af"}">${p.upnl.toFixed(2)}</td>
+      </tr>
+    `).join("");
+  }
+
+  function route(topic, type, opts = {}) {
+    if (topic === "market.raw") animatePacket("market-sim", "normalizer", "tick");
+    if (topic === "market.normalized") {
+      animatePacket("normalizer", "execution", "norm");
+      animatePacket("normalizer", "portfolio", "norm");
+    }
+    if (topic === "order.commands") animatePacket("order-api", "risk", "order");
+    if (topic === "risk.accepted") animatePacket("risk", "execution", type.includes("cancel") ? "cancel" : "accept");
+    if (topic === "risk.rejected") animatePacket("risk", "query", "reject", "reject");
+    if (topic === "execution.events") {
+      animatePacket("execution", "portfolio", type.includes("filled") ? "fill" : "exec");
+      animatePacket("execution", "query", "exec");
+    }
+    if (topic === "portfolio.events") animatePacket("portfolio", "query", "ledger");
+    if (topic === "deadletter.events") animatePacket(opts.from || "risk", "dlq", "DLQ", "dlq");
+    if (topic === "replay.jobs") animatePacket("dlq", "risk", "replay", "replay");
+  }
+
+  function emit(topic, type, detail, opts = {}) {
+    route(topic, type, opts);
+    pushEvent(topic, type, detail);
+  }
+
+  function evaluateRisk(order) {
+    const l = state.limits[order.accountId];
+    if (!l) return { ok: false, reason: "NO_ACCOUNT_LIMIT" };
+    const openOrders = state.orders.filter(o => o.accountId === order.accountId && o.status === "OPEN");
+    const openNotional = openOrders.reduce((acc, o) => acc + (o.qty * o.price), 0);
+    const notional = order.qty * order.price;
+
+    if (openOrders.length >= l.maxOpenOrders) return { ok: false, reason: "OPEN_ORDER_LIMIT" };
+    if ((openNotional + notional) > l.maxNotional) return { ok: false, reason: "NOTIONAL_LIMIT" };
+    return { ok: true, reason: "ACCEPTED" };
+  }
+
+  function markPnl(symbol) {
+    const q = state.quotes[symbol];
+    const mid = (q.bid + q.ask) / 2;
+    state.totalPnl = 0;
+    for (const p of Object.values(state.positions)) {
+      if (p.symbol === symbol) {
+        p.upnl = p.qty * (mid - p.avg);
+      }
+      state.totalPnl += p.upnl;
+    }
+  }
+
+  function recordFill(order, fillPx) {
+    const key = `${order.accountId}_${order.symbol}`;
+    const signedQty = order.side === "BUY" ? order.qty : -order.qty;
+    const pos = state.positions[key];
+
+    if (!pos) {
+      state.positions[key] = { accountId: order.accountId, symbol: order.symbol, qty: signedQty, avg: fillPx, upnl: 0 };
+    } else {
+      const newQty = pos.qty + signedQty;
+      if (Math.sign(pos.qty) === Math.sign(signedQty) || pos.qty === 0) {
+        const totalAbs = Math.abs(pos.qty) + Math.abs(signedQty);
+        pos.avg = totalAbs === 0 ? 0 : ((Math.abs(pos.qty) * pos.avg) + (Math.abs(signedQty) * fillPx)) / totalAbs;
+      } else if (Math.abs(signedQty) > Math.abs(pos.qty)) {
+        pos.avg = fillPx;
+      }
+      pos.qty = newQty;
+    }
+
+    markPnl(order.symbol);
+    renderPositions();
+  }
+
+  function tryFill(order) {
+    const q = state.quotes[order.symbol];
+    if (!q || order.status !== "OPEN") return;
+
+    const fillPx = order.side === "BUY" ? q.ask : q.bid;
+    const fillable = order.side === "BUY" ? order.price >= q.ask : order.price <= q.bid;
+
+    if (!fillable) return;
+
+    order.status = "FILLED";
+    emit("execution.events", "execution.order.filled", `${order.orderId} @ ${fillPx.toFixed(2)}`);
+    emit("portfolio.events", "portfolio.fill.recorded", `${order.symbol} qty ${order.qty}`);
+    state.filledCount += 1;
+    recordFill(order, fillPx);
+    renderOrders();
+  }
+
+  function createOrder() {
+    const accountId = document.getElementById("account").value;
+    const symbol = document.getElementById("symbol").value;
+    const side = document.getElementById("side").value;
+    const qty = Number(document.getElementById("qty").value || 0);
+    const price = Number(document.getElementById("price").value || 0);
+
+    if (qty <= 0 || price <= 0) return;
+
+    const order = { orderId: idForOrder(), accountId, symbol, side, qty, price, status: "PENDING_RISK" };
+    state.orders.push(order);
+
+    emit("order.commands", "order.new.requested", `${order.orderId} ${side} ${symbol} x${qty}`);
+
+    if (document.getElementById("injectFault").checked) {
+      const dead = { id: `DLQ-${Date.now()}`, payload: { ...order }, from: "order-api" };
+      state.dlq.push(dead);
+      emit("deadletter.events", "deadletter.created", `${dead.id} injected`, { from: dead.from });
+      document.getElementById("injectFault").checked = false;
+      renderMetrics();
+      renderOrders();
+      return;
+    }
+
+    const risk = evaluateRisk(order);
+    if (!risk.ok) {
+      order.status = "RISK_REJECTED";
+      emit("risk.rejected", "risk.rejected", `${order.orderId} ${risk.reason}`);
+      renderOrders();
+      return;
+    }
+
+    order.status = "RISK_ACCEPTED";
+    emit("risk.accepted", "risk.accepted", `${order.orderId} ACCEPTED`);
+
+    setTimeout(() => {
+      order.status = "OPEN";
+      emit("execution.events", "execution.order.opened", `${order.orderId} OPEN`);
+      renderOrders();
+      tryFill(order);
+    }, 220);
+
+    renderOrders();
+  }
+
+  function cancelLastOpenOrder() {
+    const open = [...state.orders].reverse().find(o => o.status === "OPEN");
+    if (!open) {
+      pushEvent("order.commands", "order.cancel.requested", "no OPEN order to cancel");
+      return;
+    }
+
+    emit("order.commands", "order.cancel.requested", `${open.orderId}`);
+    emit("risk.accepted", "risk.accepted(cancel)", `${open.orderId}`);
+
+    const cancelled = open.status === "OPEN";
+    if (cancelled) {
+      open.status = "CANCELLED";
+      emit("execution.events", "execution.order.cancelled", `${open.orderId}`);
+    } else {
+      emit("execution.events", "execution.order.cancel_after_fill", `${open.orderId}`);
+    }
+    renderOrders();
+  }
+
+  function replayDlq() {
+    if (state.dlq.length === 0) {
+      pushEvent("replay.jobs", "replay.job.created", "no deadletter event");
+      return;
+    }
+
+    emit("replay.jobs", "replay.job.created", `jobs: ${state.dlq.length}`);
+
+    const jobs = [...state.dlq];
+    state.dlq = [];
+    renderMetrics();
+
+    jobs.forEach((j, idx) => {
+      setTimeout(() => {
+        emit("replay.jobs", "replay.job.running", `${j.id}`);
+        const recovered = { ...j.payload, orderId: idForOrder(), status: "PENDING_RISK" };
+        state.orders.push(recovered);
+        emit("order.commands", "order.new.requested(replay)", `${recovered.orderId}`);
+        const risk = evaluateRisk(recovered);
+        if (!risk.ok) {
+          recovered.status = "RISK_REJECTED";
+          emit("risk.rejected", "risk.rejected", `${recovered.orderId} ${risk.reason}`);
+          renderOrders();
+          return;
+        }
+        recovered.status = "OPEN";
+        emit("risk.accepted", "risk.accepted", `${recovered.orderId}`);
+        emit("execution.events", "execution.order.opened", `${recovered.orderId}`);
+        tryFill(recovered);
+        renderOrders();
+      }, idx * 300);
+    });
+  }
+
+  function marketTick() {
+    if (!state.runningFeed) return;
+    const symbols = Object.keys(state.quotes);
+    const symbol = symbols[Math.floor(Math.random() * symbols.length)];
+    const q = state.quotes[symbol];
+    const drift = (Math.random() - 0.5) * 0.8;
+    const mid = Math.max(1, ((q.bid + q.ask) / 2) + drift);
+
+    q.bid = Number((mid - 0.1).toFixed(2));
+    q.ask = Number((mid + 0.1).toFixed(2));
+
+    emit("market.raw", "market.tick.raw", `${symbol} ${q.bid}/${q.ask}`);
+    setTimeout(() => {
+      emit("market.normalized", "market.tick.normalized", `${symbol} ${q.bid}/${q.ask}`);
+      state.orders.filter(o => o.symbol === symbol && o.status === "OPEN").forEach(tryFill);
+      markPnl(symbol);
+      renderOrders();
+      renderPositions();
+      renderMetrics();
+    }, 120);
+  }
+
+  document.getElementById("sendOrder").addEventListener("click", createOrder);
+  document.getElementById("cancelLast").addEventListener("click", cancelLastOpenOrder);
+  document.getElementById("replayDlq").addEventListener("click", replayDlq);
+  document.getElementById("toggleFeed").addEventListener("click", (e) => {
+    state.runningFeed = !state.runningFeed;
+    e.target.textContent = state.runningFeed ? "暫停行情" : "恢復行情";
+  });
+
+  setInterval(marketTick, 1100);
+  renderOrders();
+  renderPositions();
+  renderMetrics();
+  pushEvent("market.raw", "boot", "simulation started");
+})();
+</script>
+</body>
+</html>
