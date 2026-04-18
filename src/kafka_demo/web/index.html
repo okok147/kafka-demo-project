@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Kafka Trading Demo Dashboard</title>
+  <style>
+    :root {
+      --bg: #0d1b2a;
+      --card: #1b263b;
+      --text: #f1faee;
+      --muted: #9aa7b8;
+      --accent: #4cc9f0;
+      --good: #80ed99;
+      --bad: #ff758f;
+    }
+    body {
+      margin: 0;
+      font-family: "DM Sans", "Noto Sans TC", sans-serif;
+      background: radial-gradient(circle at top left, #264653, var(--bg));
+      color: var(--text);
+      min-height: 100vh;
+    }
+    .wrap {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+    h1 { margin: 0 0 16px; letter-spacing: 0.02em; }
+    .grid {
+      display: grid;
+      gap: 16px;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    }
+    .card {
+      background: rgba(27,38,59,0.85);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 14px;
+      padding: 16px;
+      backdrop-filter: blur(4px);
+    }
+    .label { color: var(--muted); font-size: 13px; }
+    .value { font-size: 30px; font-weight: 700; margin-top: 8px; }
+    .good { color: var(--good); }
+    .bad { color: var(--bad); }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      font-size: 14px;
+    }
+    th, td {
+      padding: 8px;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      text-align: left;
+    }
+    .toolbar {
+      display: flex;
+      gap: 8px;
+      margin: 16px 0;
+      align-items: center;
+    }
+    button {
+      background: linear-gradient(135deg, #219ebc, #4cc9f0);
+      border: none;
+      color: #041016;
+      font-weight: 700;
+      border-radius: 10px;
+      padding: 10px 14px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Kafka Trading Demo Dashboard</h1>
+    <div class="toolbar">
+      <button onclick="refreshAll()">刷新</button>
+      <span class="label" id="last-update">尚未更新</span>
+    </div>
+    <div class="grid">
+      <div class="card"><div class="label">總訂單數</div><div class="value" id="orders">-</div></div>
+      <div class="card"><div class="label">未平倉單數</div><div class="value" id="open-orders">-</div></div>
+      <div class="card"><div class="label">Fill 數</div><div class="value" id="fills">-</div></div>
+      <div class="card"><div class="label">最新總 PnL</div><div class="value" id="pnl">-</div></div>
+    </div>
+
+    <div class="card" style="margin-top:16px;">
+      <div class="label">Orders View</div>
+      <table>
+        <thead><tr><th>Order</th><th>Account</th><th>Symbol</th><th>Side</th><th>Status</th><th>Updated</th></tr></thead>
+        <tbody id="orders-table"></tbody>
+      </table>
+    </div>
+
+    <div class="card" style="margin-top:16px;">
+      <div class="label">Positions View</div>
+      <table>
+        <thead><tr><th>Account</th><th>Symbol</th><th>Qty</th><th>Avg</th><th>Realized</th><th>Unrealized</th></tr></thead>
+        <tbody id="positions-table"></tbody>
+      </table>
+    </div>
+  </div>
+
+<script>
+async function getJson(path) {
+  const r = await fetch(path);
+  if (!r.ok) throw new Error(path + ' failed');
+  return r.json();
+}
+
+function setText(id, val) {
+  document.getElementById(id).textContent = val;
+}
+
+async function refreshAll() {
+  const [dashboard, orders, positions] = await Promise.all([
+    getJson('/dashboard'),
+    getJson('/views/orders?limit=20'),
+    getJson('/views/positions')
+  ]);
+
+  setText('orders', dashboard.total_orders);
+  setText('open-orders', dashboard.open_orders);
+  setText('fills', dashboard.total_fills);
+  const pnlEl = document.getElementById('pnl');
+  pnlEl.textContent = Number(dashboard.latest_total_pnl).toFixed(2);
+  pnlEl.className = 'value ' + (Number(dashboard.latest_total_pnl) >= 0 ? 'good' : 'bad');
+
+  const ot = document.getElementById('orders-table');
+  ot.innerHTML = orders.map(o => `<tr><td>${o.order_id}</td><td>${o.account_id}</td><td>${o.symbol}</td><td>${o.side}</td><td>${o.status}</td><td>${o.updated_at}</td></tr>`).join('');
+
+  const pt = document.getElementById('positions-table');
+  pt.innerHTML = positions.map(p => `<tr><td>${p.account_id}</td><td>${p.symbol}</td><td>${p.quantity}</td><td>${p.avg_price}</td><td>${p.realized_pnl}</td><td>${p.unrealized_pnl}</td></tr>`).join('');
+
+  setText('last-update', '最後更新：' + new Date().toLocaleString());
+}
+
+refreshAll().catch(console.error);
+setInterval(() => refreshAll().catch(console.error), 5000);
+</script>
+</body>
+</html>

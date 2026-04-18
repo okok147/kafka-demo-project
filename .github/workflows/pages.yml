@@ -1,0 +1,48 @@
+name: Deploy Docs Website
+
+on:
+  push:
+    branches: ["main"]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare site
+        run: |
+          mkdir -p site
+          cp README.md site/index.md
+          cat > site/index.html <<'HTML'
+          <!DOCTYPE html>
+          <html lang="zh-Hant">
+          <head>
+            <meta charset="UTF-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1" />
+            <title>Kafka Demo Website</title>
+            <style>
+              body{font-family:"Noto Sans TC",sans-serif;margin:0;background:#0f172a;color:#e2e8f0;}
+              .wrap{max-width:900px;margin:40px auto;padding:24px;background:#1e293b;border-radius:16px;}
+              a{color:#7dd3fc;}
+            </style>
+          </head>
+          <body>
+            <div class="wrap">
+              <h1>Kafka Trading Demo</h1>
+              <p>此 repo 已建立可運行的 Kafka + Postgres 事件驅動交易示範。</p>
+              <p>本地完整 Dashboard：<code>http://localhost:8080</code></p>
+              <p>啟動方式：<code>docker compose up --build</code></p>
+            </div>
+          </body>
+          </html>
+HTML
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - uses: actions/deploy-pages@v4

@@ -1,0 +1,211 @@
+services:
+  kafka:
+    image: bitnami/kafka:3.7
+    container_name: kafka
+    environment:
+      - KAFKA_CFG_NODE_ID=1
+      - KAFKA_CFG_PROCESS_ROLES=broker,controller
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=1@kafka:9093
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=false
+      - KAFKA_KRAFT_CLUSTER_ID=abcdefghijklmnopqrstuv
+    ports:
+      - "9092:9092"
+    networks:
+      - app_net
+
+  postgres:
+    image: postgres:16
+    container_name: postgres
+    environment:
+      - POSTGRES_DB=kafkademo
+      - POSTGRES_USER=kafka
+      - POSTGRES_PASSWORD=kafka
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - app_net
+
+  topic-bootstrap:
+    build: .
+    command: ["python", "/app/scripts/bootstrap_topics.py"]
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+    depends_on:
+      - kafka
+    networks:
+      - app_net
+
+  admin-bootstrap:
+    build: .
+    command: ["python", "/app/scripts/admin_bootstrap.py"]
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=kafkademo
+      - POSTGRES_USER=kafka
+      - POSTGRES_PASSWORD=kafka
+    depends_on:
+      - postgres
+    networks:
+      - app_net
+
+  market-data-simulator:
+    build: .
+    command: ["python", "-m", "kafka_demo.entrypoints.market_data_simulator"]
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+    depends_on:
+      - kafka
+      - topic-bootstrap
+    networks:
+      - app_net
+
+  market-normalizer-service:
+    build: .
+    command: ["python", "-m", "kafka_demo.entrypoints.market_normalizer"]
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+    depends_on:
+      - kafka
+      - topic-bootstrap
+    networks:
+      - app_net
+
+  order-api-service:
+    build: .
+    command: ["python", "-m", "kafka_demo.entrypoints.order_api"]
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=kafkademo
+      - POSTGRES_USER=kafka
+      - POSTGRES_PASSWORD=kafka
+      - ORDER_API_PORT=8000
+    depends_on:
+      - kafka
+      - postgres
+      - topic-bootstrap
+    ports:
+      - "8000:8000"
+    networks:
+      - app_net
+
+  risk-service:
+    build: .
+    command: ["python", "-m", "kafka_demo.entrypoints.risk_service"]
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=kafkademo
+      - POSTGRES_USER=kafka
+      - POSTGRES_PASSWORD=kafka
+    depends_on:
+      - kafka
+      - postgres
+      - topic-bootstrap
+    networks:
+      - app_net
+
+  execution-service:
+    build: .
+    command: ["python", "-m", "kafka_demo.entrypoints.execution_service"]
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=kafkademo
+      - POSTGRES_USER=kafka
+      - POSTGRES_PASSWORD=kafka
+    depends_on:
+      - kafka
+      - postgres
+      - topic-bootstrap
+    networks:
+      - app_net
+
+  portfolio-service:
+    build: .
+    command: ["python", "-m", "kafka_demo.entrypoints.portfolio_service"]
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=kafkademo
+      - POSTGRES_USER=kafka
+      - POSTGRES_PASSWORD=kafka
+    depends_on:
+      - kafka
+      - postgres
+      - topic-bootstrap
+    networks:
+      - app_net
+
+  query-projector:
+    build: .
+    command: ["python", "-m", "kafka_demo.entrypoints.query_projector"]
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=kafkademo
+      - POSTGRES_USER=kafka
+      - POSTGRES_PASSWORD=kafka
+      - QUERY_API_PORT=8080
+    depends_on:
+      - kafka
+      - postgres
+      - topic-bootstrap
+    ports:
+      - "8080:8080"
+    networks:
+      - app_net
+
+  replay-runner:
+    build: .
+    command: ["python", "-m", "kafka_demo.entrypoints.replay_runner"]
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=kafkademo
+      - POSTGRES_USER=kafka
+      - POSTGRES_PASSWORD=kafka
+    depends_on:
+      - kafka
+      - postgres
+      - topic-bootstrap
+    networks:
+      - app_net
+
+  deadletter-handler:
+    build: .
+    command: ["python", "-m", "kafka_demo.entrypoints.deadletter_handler"]
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=kafkademo
+      - POSTGRES_USER=kafka
+      - POSTGRES_PASSWORD=kafka
+    depends_on:
+      - kafka
+      - postgres
+      - topic-bootstrap
+    networks:
+      - app_net
+
+volumes:
+  pg_data:
+
+networks:
+  app_net:
+    driver: bridge
