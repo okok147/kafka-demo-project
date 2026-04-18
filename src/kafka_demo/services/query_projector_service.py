@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import json
+import os
 import threading
 import uuid
 from pathlib import Path
 
-from fastapi import FastAPI
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse, JSONResponse
+import requests
 
 from kafka_demo.common.config import settings
 from kafka_demo.common.db import fetch_all, fetch_one, get_conn
@@ -15,12 +17,14 @@ from kafka_demo.common.event_bus import publish_deadletter, publish_event
 from kafka_demo.common.kafka_client import build_consumer, build_producer
 from kafka_demo.common.serde import deserialize_envelope
 from kafka_demo.common.topics import EXECUTION_EVENTS, ORDER_COMMANDS, PORTFOLIO_EVENTS, REPLAY_JOBS, RISK_ACCEPTED, RISK_REJECTED
+from kafka_demo.services.order_api_service import CancelOrderRequest, CreateOrderRequest
 
 
 PROJECTOR_TOPICS = [ORDER_COMMANDS, RISK_ACCEPTED, RISK_REJECTED, EXECUTION_EVENTS, PORTFOLIO_EVENTS]
 
 app = FastAPI(title="query-projector")
 producer = build_producer()
+order_api_internal_url = os.environ.get("ORDER_API_INTERNAL_URL", f"http://127.0.0.1:{os.environ.get('ORDER_API_PORT', '8000')}")
 
 
 
@@ -69,6 +73,36 @@ def _startup() -> None:
 @app.get("/")
 def index():
     return FileResponse(Path(__file__).resolve().parent.parent / "web" / "index.html")
+
+
+def _forward_json(method: str, path: str, payload: dict | None = None, headers: dict | None = None) -> JSONResponse:
+    url = f"{order_api_internal_url}{path}"
+    try:
+        resp = requests.request(method=method, url=url, json=payload, headers=headers, timeout=20)
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=503, detail=f"order api unavailable: {exc}") from exc
+
+    try:
+        body = resp.json()
+    except ValueError:
+        body = {"detail": resp.text}
+    return JSONResponse(status_code=resp.status_code, content=body)
+
+
+@app.post("/orders")
+def create_order(payload: CreateOrderRequest, request: Request):
+    headers = {}
+    idem_key = request.headers.get("Idempotency-Key")
+    if idem_key:
+        headers["Idempotency-Key"] = idem_key
+    body = payload.model_dump(mode="json")
+    return _forward_json("POST", "/orders", payload=body, headers=headers)
+
+
+@app.post("/orders/{order_id}/cancel")
+def cancel_order(order_id: str, payload: CancelOrderRequest):
+    body = payload.model_dump(mode="json")
+    return _forward_json("POST", f"/orders/{order_id}/cancel", payload=body, headers=None)
 
 
 @app.get("/views/orders")

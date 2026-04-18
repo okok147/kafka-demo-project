@@ -2,17 +2,33 @@
 
 這是一個以 Kafka 事件驅動為核心的交易系統示範，覆蓋你列出的 Work Package 0-9。
 
-## Cloud Hosting（非 localhost）
+## Cloud Hosting（免費、免信用卡）
 
-本 repo 已提供 `render.yaml`，可直接在 Render 佈署整套 0-9（Kafka、Postgres、API、workers）。
+建議用 Hugging Face Docker Space（官方有免費 CPU Basic：2 vCPU、16GB RAM、50GB 磁碟）。
+
+- 官方說明（Docker Space）：https://huggingface.co/docs/hub/en/spaces-sdks-docker
+- 官方免費硬體說明（CPU Basic FREE）：https://huggingface.co/docs/hub/spaces-overview
+
+### 部署步驟（Hugging Face）
+1. 在 Hugging Face 建立新 Space，SDK 選 `Docker`。
+2. 連接這個 repo：`okok147/kafka-demo-project`。
+3. Space 啟動後，公開網址即為整套 0-9 對外入口（Dashboard + API）。
+
+公開入口可直接使用：
+- `GET /` Dashboard
+- `POST /orders`
+- `POST /orders/{id}/cancel`
+- `GET /dashboard`
+- `POST /replay/jobs`
+- `POST /replay/deadletters/{id}`
+
+註：Docker Space 內是單容器啟動（Kafka + Postgres + workers + APIs 全部同機）；若要正式生產高可用，再改多服務拓撲。
+
+## Cloud Hosting（Render，需付費）
+
+若你之後接受付費部署，repo 也保留了 `render.yaml`：
 
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/okok147/kafka-demo-project)
-
-部署後會得到至少兩個公開網址：
-- `order-api-service.onrender.com`
-- `query-projector.onrender.com`（Dashboard 網站入口）
-
-註：`kafka-broker`、各 worker、Postgres 走 Render private network，不暴露公網。
 
 ## 架構與 Work Package 對應
 
