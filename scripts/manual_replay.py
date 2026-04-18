@@ -10,13 +10,17 @@ def main() -> None:
     parser.add_argument("--deadletter-event-id", type=int, required=True)
     args = parser.parse_args()
 
-    conn = psycopg2.connect(
-        host=os.environ.get("POSTGRES_HOST", "localhost"),
-        port=os.environ.get("POSTGRES_PORT", "5432"),
-        dbname=os.environ.get("POSTGRES_DB", "kafkademo"),
-        user=os.environ.get("POSTGRES_USER", "kafka"),
-        password=os.environ.get("POSTGRES_PASSWORD", "kafka"),
-    )
+    dsn = os.environ.get("POSTGRES_DSN", os.environ.get("DATABASE_URL", ""))
+    if dsn:
+        conn = psycopg2.connect(dsn)
+    else:
+        conn = psycopg2.connect(
+            host=os.environ.get("POSTGRES_HOST", "localhost"),
+            port=os.environ.get("POSTGRES_PORT", "5432"),
+            dbname=os.environ.get("POSTGRES_DB", "kafkademo"),
+            user=os.environ.get("POSTGRES_USER", "kafka"),
+            password=os.environ.get("POSTGRES_PASSWORD", "kafka"),
+        )
 
     with conn:
         with conn.cursor() as cur:

@@ -1,0 +1,167 @@
+services:
+  - type: pserv
+    name: kafka-broker
+    runtime: image
+    plan: starter
+    image:
+      url: docker.io/bitnami/kafka:3.7
+    dockerCommand: >-
+      /bin/bash -lc "
+      export KAFKA_CFG_NODE_ID=1;
+      export KAFKA_CFG_PROCESS_ROLES=broker,controller;
+      export KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093;
+      export KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka-broker:9092;
+      export KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT;
+      export KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=1@kafka-broker:9093;
+      export KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER;
+      export KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=false;
+      export KAFKA_KRAFT_CLUSTER_ID=abcdefghijklmnopqrstuv;
+      /opt/bitnami/scripts/kafka/run.sh"
+
+  - type: worker
+    name: bootstrap-worker
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    dockerCommand: python /app/scripts/cloud_bootstrap_loop.py
+    envVars:
+      - key: KAFKA_BOOTSTRAP_SERVERS
+        value: kafka-broker:9092
+      - key: POSTGRES_DSN
+        fromDatabase:
+          name: kafka-demo-postgres
+          property: connectionString
+
+  - type: worker
+    name: market-data-simulator
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    dockerCommand: python -m kafka_demo.entrypoints.market_data_simulator
+    envVars:
+      - key: KAFKA_BOOTSTRAP_SERVERS
+        value: kafka-broker:9092
+
+  - type: worker
+    name: market-normalizer-service
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    dockerCommand: python -m kafka_demo.entrypoints.market_normalizer
+    envVars:
+      - key: KAFKA_BOOTSTRAP_SERVERS
+        value: kafka-broker:9092
+
+  - type: worker
+    name: risk-service
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    dockerCommand: python -m kafka_demo.entrypoints.risk_service
+    envVars:
+      - key: KAFKA_BOOTSTRAP_SERVERS
+        value: kafka-broker:9092
+      - key: POSTGRES_DSN
+        fromDatabase:
+          name: kafka-demo-postgres
+          property: connectionString
+
+  - type: worker
+    name: execution-service
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    dockerCommand: python -m kafka_demo.entrypoints.execution_service
+    envVars:
+      - key: KAFKA_BOOTSTRAP_SERVERS
+        value: kafka-broker:9092
+      - key: POSTGRES_DSN
+        fromDatabase:
+          name: kafka-demo-postgres
+          property: connectionString
+
+  - type: worker
+    name: portfolio-service
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    dockerCommand: python -m kafka_demo.entrypoints.portfolio_service
+    envVars:
+      - key: KAFKA_BOOTSTRAP_SERVERS
+        value: kafka-broker:9092
+      - key: POSTGRES_DSN
+        fromDatabase:
+          name: kafka-demo-postgres
+          property: connectionString
+
+  - type: worker
+    name: replay-runner
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    dockerCommand: python -m kafka_demo.entrypoints.replay_runner
+    envVars:
+      - key: KAFKA_BOOTSTRAP_SERVERS
+        value: kafka-broker:9092
+      - key: POSTGRES_DSN
+        fromDatabase:
+          name: kafka-demo-postgres
+          property: connectionString
+
+  - type: worker
+    name: deadletter-handler
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    dockerCommand: python -m kafka_demo.entrypoints.deadletter_handler
+    envVars:
+      - key: KAFKA_BOOTSTRAP_SERVERS
+        value: kafka-broker:9092
+      - key: POSTGRES_DSN
+        fromDatabase:
+          name: kafka-demo-postgres
+          property: connectionString
+
+  - type: web
+    name: order-api-service
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    dockerCommand: python -m kafka_demo.entrypoints.order_api
+    healthCheckPath: /healthz
+    envVars:
+      - key: KAFKA_BOOTSTRAP_SERVERS
+        value: kafka-broker:9092
+      - key: POSTGRES_DSN
+        fromDatabase:
+          name: kafka-demo-postgres
+          property: connectionString
+
+  - type: web
+    name: query-projector
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    dockerCommand: python -m kafka_demo.entrypoints.query_projector
+    healthCheckPath: /dashboard
+    envVars:
+      - key: KAFKA_BOOTSTRAP_SERVERS
+        value: kafka-broker:9092
+      - key: POSTGRES_DSN
+        fromDatabase:
+          name: kafka-demo-postgres
+          property: connectionString
+
+databases:
+  - name: kafka-demo-postgres
+    plan: starter

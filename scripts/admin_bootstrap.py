@@ -5,15 +5,20 @@ import psycopg2
 
 
 def main() -> None:
+    dsn = os.environ.get("POSTGRES_DSN", os.environ.get("DATABASE_URL", ""))
+
     for attempt in range(30):
         try:
-            conn = psycopg2.connect(
-                host=os.environ.get("POSTGRES_HOST", "postgres"),
-                port=os.environ.get("POSTGRES_PORT", "5432"),
-                dbname=os.environ.get("POSTGRES_DB", "kafkademo"),
-                user=os.environ.get("POSTGRES_USER", "kafka"),
-                password=os.environ.get("POSTGRES_PASSWORD", "kafka"),
-            )
+            if dsn:
+                conn = psycopg2.connect(dsn)
+            else:
+                conn = psycopg2.connect(
+                    host=os.environ.get("POSTGRES_HOST", "postgres"),
+                    port=os.environ.get("POSTGRES_PORT", "5432"),
+                    dbname=os.environ.get("POSTGRES_DB", "kafkademo"),
+                    user=os.environ.get("POSTGRES_USER", "kafka"),
+                    password=os.environ.get("POSTGRES_PASSWORD", "kafka"),
+                )
             with conn:
                 with conn.cursor() as cur:
                     cur.execute(

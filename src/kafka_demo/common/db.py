@@ -6,6 +6,8 @@ from kafka_demo.common.config import settings
 
 
 def get_conn():
+    if settings.postgres_dsn:
+        return psycopg2.connect(settings.postgres_dsn)
     return psycopg2.connect(
         host=settings.postgres_host,
         port=settings.postgres_port,

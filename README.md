@@ -2,6 +2,18 @@
 
 這是一個以 Kafka 事件驅動為核心的交易系統示範，覆蓋你列出的 Work Package 0-9。
 
+## Cloud Hosting（非 localhost）
+
+本 repo 已提供 `render.yaml`，可直接在 Render 佈署整套 0-9（Kafka、Postgres、API、workers）。
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/okok147/kafka-demo-project)
+
+部署後會得到至少兩個公開網址：
+- `order-api-service.onrender.com`
+- `query-projector.onrender.com`（Dashboard 網站入口）
+
+註：`kafka-broker`、各 worker、Postgres 走 Render private network，不暴露公網。
+
 ## 架構與 Work Package 對應
 
 ### Work Package 0：Infra
@@ -112,4 +124,19 @@ curl -X POST 'http://localhost:8080/replay/deadletters/1?requested_by=ops'
 
 ```bash
 PYTHONPATH=src pytest -q
+```
+
+## Render 部署後 Smoke Test（範例）
+
+先把 `<ORDER_API_URL>`、`<QUERY_URL>` 換成你的 Render 網址。
+
+```bash
+curl -X POST <ORDER_API_URL>/orders \
+  -H 'Content-Type: application/json' \
+  -H 'Idempotency-Key: ord-render-001' \
+  -d '{"account_id":"ACC-001","symbol":"AAPL","side":"BUY","quantity":"1","price":"200"}'
+```
+
+```bash
+curl <QUERY_URL>/dashboard
 ```
