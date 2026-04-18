@@ -9,6 +9,8 @@
 - https://okok147.github.io/kafka-demo-project/
 
 互動功能：
+- 重新設計為 Kafka production incident control room / NOC 風格
+- 顯示 cluster health、broker leader share、consumer group lag、incident runbook
 - 送出 BUY/SELL 訂單
 - 取消最後 OPEN 訂單
 - 注入故障到 DLQ

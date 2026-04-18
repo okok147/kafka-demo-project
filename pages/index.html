@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Kafka Orderflow Visual Simulation</title>
+  <title>Kafka Incident Command Center</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
@@ -353,122 +353,530 @@
       line-height: 1.5;
     }
 
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.75fr);
+      gap: 16px;
+      margin-bottom: 16px;
+      align-items: stretch;
+    }
+
+    .hero-copy,
+    .hero-rail {
+      background: linear-gradient(180deg, rgba(12, 20, 35, 0.94), rgba(9, 15, 26, 0.92));
+      border: 1px solid #22324c;
+      border-radius: 18px;
+      padding: 18px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.28);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero-copy::before,
+    .hero-rail::before {
+      content: "";
+      position: absolute;
+      inset: auto -10% -40% auto;
+      width: 280px;
+      height: 280px;
+      background: radial-gradient(circle, rgba(34, 211, 238, 0.16), transparent 62%);
+      pointer-events: none;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-family: "Space Grotesk", sans-serif;
+      font-size: 12px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: #9fd7ff;
+      margin-bottom: 10px;
+    }
+
+    .eyebrow::before {
+      content: "";
+      width: 26px;
+      height: 1px;
+      background: linear-gradient(90deg, rgba(34, 211, 238, 0.15), rgba(34, 211, 238, 1));
+    }
+
+    .hero-copy .title {
+      font-size: clamp(30px, 4vw, 54px);
+      line-height: 0.95;
+      max-width: 10ch;
+    }
+
+    .hero-copy .sub {
+      max-width: 58ch;
+      font-size: 15px;
+      line-height: 1.6;
+      margin-top: 12px;
+    }
+
+    .hero-callouts {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 18px;
+    }
+
+    .hero-stat {
+      padding-top: 12px;
+      border-top: 1px solid rgba(116, 142, 184, 0.22);
+    }
+
+    .hero-stat .label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #7f97ba;
+    }
+
+    .hero-stat strong {
+      display: block;
+      margin-top: 8px;
+      font-family: "Space Grotesk", sans-serif;
+      font-size: 20px;
+      color: #edf5ff;
+    }
+
+    .hero-rail {
+      display: grid;
+      gap: 12px;
+      align-content: start;
+    }
+
+    .rail-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .rail-card {
+      border: 1px solid #233553;
+      border-radius: 14px;
+      padding: 14px;
+      background: rgba(9, 15, 26, 0.72);
+    }
+
+    .rail-card .k {
+      font-size: 11px;
+      color: #90a4c3;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .rail-card .v {
+      margin-top: 8px;
+      font-family: "Space Grotesk", sans-serif;
+      font-size: 24px;
+      font-weight: 700;
+      color: #f2f6fd;
+    }
+
+    .rail-card .s {
+      margin-top: 6px;
+      font-size: 12px;
+      color: #88a1c3;
+    }
+
+    .command-layout {
+      display: grid;
+      grid-template-columns: 320px minmax(0, 1fr);
+      gap: 16px;
+      align-items: start;
+    }
+
+    .sidebar {
+      display: grid;
+      gap: 16px;
+      position: sticky;
+      top: 18px;
+    }
+
+    .side-block {
+      display: grid;
+      gap: 12px;
+    }
+
+    .section-copy {
+      margin-top: -4px;
+      color: #8ea5c4;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .workspace {
+      display: grid;
+      gap: 16px;
+    }
+
+    .metrics {
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+      margin: 0;
+    }
+
+    .metric {
+      min-height: 88px;
+      background: linear-gradient(180deg, rgba(10, 18, 33, 0.92), rgba(9, 15, 26, 0.86));
+    }
+
+    .ops-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.85fr);
+      gap: 16px;
+      align-items: start;
+    }
+
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: flex-end;
+      margin-bottom: 14px;
+    }
+
+    .section-head h2 {
+      margin-bottom: 0;
+    }
+
+    .section-head p {
+      margin: 0;
+      color: #8ba2c2;
+      font-size: 12px;
+      line-height: 1.5;
+      max-width: 56ch;
+    }
+
+    .broker-strip {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .broker-card {
+      border: 1px solid #22324e;
+      border-radius: 14px;
+      background: linear-gradient(180deg, rgba(8, 14, 26, 0.88), rgba(8, 14, 23, 0.72));
+      padding: 14px;
+    }
+
+    .broker-card .k {
+      color: #8aa4c7;
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .broker-card .v {
+      display: block;
+      margin-top: 8px;
+      font-family: "Space Grotesk", sans-serif;
+      font-size: 22px;
+      font-weight: 700;
+    }
+
+    .broker-card .s {
+      margin-top: 6px;
+      font-size: 12px;
+      color: #87a1c5;
+    }
+
+    .flow-stage {
+      width: 1380px;
+      height: 720px;
+      background:
+        linear-gradient(180deg, rgba(18, 29, 48, 0.85), rgba(7, 11, 20, 1)),
+        radial-gradient(480px 240px at 12% 8%, rgba(245, 158, 11, 0.08), transparent 62%),
+        radial-gradient(620px 280px at 88% 0%, rgba(34, 211, 238, 0.1), transparent 58%);
+    }
+
+    .flow-stage::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+      background-size: 48px 48px;
+      pointer-events: none;
+      opacity: 0.36;
+    }
+
+    .flow-stage::after {
+      content: "Kafka Cluster Data Plane";
+      position: absolute;
+      left: 24px;
+      bottom: 20px;
+      font-family: "Space Grotesk", sans-serif;
+      font-size: 11px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: #86a7d0;
+    }
+
+    .node {
+      width: 210px;
+      padding: 14px;
+      border-radius: 16px;
+      border: 1px solid #28405f;
+      background: linear-gradient(180deg, rgba(15, 25, 42, 0.96), rgba(9, 15, 27, 0.96));
+      box-shadow: 0 18px 42px rgba(0, 0, 0, 0.22);
+    }
+
+    .node .t {
+      color: #8faad1;
+    }
+
+    .node .n {
+      font-size: 15px;
+      color: #eff6ff;
+    }
+
+    .topic-chip {
+      background: rgba(15, 28, 48, 0.82);
+      border: 1px solid rgba(67, 121, 164, 0.75);
+      color: #b1e1ff;
+      box-shadow: 0 12px 24px rgba(3, 8, 15, 0.2);
+    }
+
+    .arrow {
+      border-top-color: #45698c;
+    }
+
+    .arrow::after {
+      border-left-color: #5d84af;
+    }
+
+    .side-stack {
+      display: grid;
+      gap: 16px;
+    }
+
+    .group-list,
+    .runbook-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .group-row,
+    .runbook-step {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+      padding: 11px 12px;
+      border-radius: 12px;
+      border: 1px solid #22324c;
+      background: rgba(8, 14, 24, 0.72);
+    }
+
+    .group-row .label,
+    .runbook-step .label {
+      font-size: 12px;
+      color: #a8bdd9;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .group-row strong,
+    .runbook-step strong {
+      font-family: "Space Grotesk", sans-serif;
+      font-size: 15px;
+      color: #eff6ff;
+      text-align: right;
+    }
+
+    .stream {
+      max-height: 360px;
+    }
+
+    .tables {
+      margin-top: 0;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .table-panel {
+      min-height: 320px;
+    }
+
+    .table-panel table {
+      margin-top: 8px;
+    }
+
     @media (max-width: 1080px) {
+      .hero,
+      .command-layout,
+      .ops-grid,
       .grid { grid-template-columns: 1fr; }
+      .sidebar {
+        position: static;
+      }
+      .metrics {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .hero-callouts,
+      .rail-grid,
+      .broker-strip,
       .tables { grid-template-columns: 1fr; }
     }
   </style>
 </head>
 <body>
   <div class="shell">
-    <div class="top">
-      <div>
-        <h1 class="title">Kafka Orderflow Visual Simulation</h1>
-        <div class="sub">純前端模擬 Kafka 事件分發與訂單流轉（無付費後端）</div>
+    <section class="hero">
+      <div class="hero-copy">
+        <div class="eyebrow">Kafka Production Operations Console</div>
+        <h1 class="title">Kafka Incident Command Center</h1>
+        <div class="sub">模擬真實 Kafka 生產環境裡 broker 壓力、consumer group lag、DLQ、replay、schema drift、rebalance storm 與 hot partition。整個畫面改成更接近資深 Kafka 工程師會使用的 incident console，而不是教學式 demo。</div>
+        <div class="hero-callouts">
+          <div class="hero-stat">
+            <div class="label">Replication</div>
+            <strong>RF=3 / ISR 3-3-3</strong>
+          </div>
+          <div class="hero-stat">
+            <div class="label">Delivery</div>
+            <strong>Idempotent + Replay Ready</strong>
+          </div>
+          <div class="hero-stat">
+            <div class="label">Mode</div>
+            <strong>Real-Time Incident Simulation</strong>
+          </div>
+        </div>
       </div>
-      <div>
-        <span class="tag"><strong>Build</strong> __GITHUB_SHA__</span>
-        <span class="tag"><strong>Updated</strong> __BUILD_TIME__</span>
+      <div class="hero-rail">
+        <div class="rail-grid">
+          <div class="rail-card">
+            <div class="k">Cluster</div>
+            <div class="v" id="clusterStateBadge">HEALTHY</div>
+            <div class="s">broker quorum, ISR, throughput</div>
+          </div>
+          <div class="rail-card">
+            <div class="k">Consumer Groups</div>
+            <div class="v" id="cgStateBadge">STABLE</div>
+            <div class="s">lag, rebalance, catch-up</div>
+          </div>
+          <div class="rail-card">
+            <div class="k">Runbook</div>
+            <div class="v" id="runbookStateBadge">OBSERVE</div>
+            <div class="s">10m / 30m / 60m action state</div>
+          </div>
+          <div class="rail-card">
+            <div class="k">Build</div>
+            <div class="v" style="font-size:18px;">__GITHUB_SHA__</div>
+            <div class="s">Updated __BUILD_TIME__</div>
+          </div>
+        </div>
       </div>
-    </div>
+    </section>
 
-    <div class="grid">
-      <div class="panel">
-        <h2>控制台</h2>
-        <div class="controls">
-          <div class="row2">
-            <label>帳戶
-              <select id="account">
-                <option>ACC-001</option>
-                <option>ACC-002</option>
-              </select>
+    <div class="command-layout">
+      <aside class="sidebar">
+        <div class="panel side-block">
+          <h2>Trade Injection</h2>
+          <div class="section-copy">用 production-style order inject controls 直接打進 order command path，用來觀察 risk、execution、projection 與 replay 行為。</div>
+          <div class="controls">
+            <div class="row2">
+              <label>帳戶
+                <select id="account">
+                  <option>ACC-001</option>
+                  <option>ACC-002</option>
+                </select>
+              </label>
+              <label>商品
+                <select id="symbol">
+                  <option>AAPL</option>
+                  <option>MSFT</option>
+                  <option>TSLA</option>
+                  <option>NVDA</option>
+                </select>
+              </label>
+            </div>
+            <div class="row2">
+              <label>方向
+                <select id="side">
+                  <option>BUY</option>
+                  <option>SELL</option>
+                </select>
+              </label>
+              <label>數量
+                <input id="qty" type="number" min="1" value="10" />
+              </label>
+            </div>
+            <label>限價
+              <input id="price" type="number" min="1" step="0.01" value="200" />
             </label>
-            <label>商品
-              <select id="symbol">
-                <option>AAPL</option>
-                <option>MSFT</option>
-                <option>TSLA</option>
-                <option>NVDA</option>
-              </select>
+            <label>Idempotency Key
+              <input id="idemKey" type="text" placeholder="例如: ord-1001" />
             </label>
-          </div>
-
-          <div class="row2">
-            <label>方向
-              <select id="side">
-                <option>BUY</option>
-                <option>SELL</option>
-              </select>
-            </label>
-            <label>數量
-              <input id="qty" type="number" min="1" value="10" />
-            </label>
-          </div>
-
-          <label>限價
-            <input id="price" type="number" min="1" step="0.01" value="200" />
-          </label>
-
-          <div class="row2">
-            <button id="sendOrder" class="primary">送出新單</button>
-            <button id="cancelLast" class="warn">取消最後 OPEN 單</button>
-          </div>
-
-          <div class="row2">
-            <button id="toggleFeed" class="ghost">暫停行情</button>
-            <button id="replayDlq" class="ghost">Replay DLQ</button>
-          </div>
-
-          <label style="display:flex;align-items:center;gap:8px;grid-template-columns:none;">
-            <input id="injectFault" type="checkbox" style="width:auto;padding:0;margin:0;" />
-            <span>注入故障（下一筆單送入 DLQ）</span>
-          </label>
-
-          <label>Idempotency Key
-            <input id="idemKey" type="text" placeholder="例如: ord-1001" />
-          </label>
-
-          <h2 style="margin-top:4px;">隨機事件產生器</h2>
-          <div class="row2">
-            <label>事件速率（每秒）
-              <input id="genRate" type="number" min="1" max="200" value="18" />
-            </label>
-            <label>Burst 倍數
-              <input id="genBurst" type="number" min="1" max="10" value="2" />
+            <div class="row2">
+              <button id="sendOrder" class="primary">送出新單</button>
+              <button id="cancelLast" class="warn">取消最後 OPEN 單</button>
+            </div>
+            <div class="row2">
+              <button id="toggleFeed" class="ghost">暫停行情</button>
+              <button id="replayDlq" class="ghost">Replay DLQ</button>
+            </div>
+            <label style="display:flex;align-items:center;gap:8px;grid-template-columns:none;">
+              <input id="injectFault" type="checkbox" style="width:auto;padding:0;margin:0;" />
+              <span>注入故障（下一筆單直接送入 DLQ）</span>
             </label>
           </div>
-          <div class="row2">
-            <label>故障率（%）
-              <input id="genFault" type="number" min="0" max="100" value="15" />
-            </label>
-            <label>Consumer 吞吐（每秒）
-              <input id="consumerRate" type="number" min="1" max="200" value="12" />
-            </label>
-          </div>
-          <div class="row2">
-            <button id="toggleGenerator" class="primary">啟動隨機流</button>
-            <button id="injectSurge" class="ghost">注入事件尖峰</button>
-          </div>
-          <div class="hint">會隨機產生 market/order/cancel/security/restart 事件，並以佇列 + consumer 模擬 Kafka lag。</div>
         </div>
 
-        <h2 style="margin-top:12px;">Kafka 用例場景</h2>
-        <div class="usecases">
-          <button id="scenarioStream" class="ghost">用例 1：即時行情串流 + 正規化</button>
-          <button id="scenarioIdem" class="ghost">用例 2：Idempotency / Duplicate 防重</button>
-          <button id="scenarioRiskReject" class="ghost">用例 3：Risk Reject</button>
-          <button id="scenarioDlqReplay" class="ghost">用例 4：DLQ + Replay</button>
-          <button id="scenarioRestart" class="ghost">用例 5：Consumer Restart 恢復</button>
-          <button id="scenarioSecurity" class="ghost">用例 6：存取控制 / Security Deny</button>
-          <button id="scenarioOutOfOrder" class="ghost">用例 7：Out-of-Order Tick（丟棄舊序列）</button>
-          <button id="scenarioPoisonPill" class="ghost">用例 8：Poison Pill -> DLQ（不中斷消費）</button>
-          <button id="scenarioRebalanceStorm" class="ghost">用例 9：Consumer Rebalance Storm</button>
-          <button id="scenarioEos" class="ghost">用例 10：Exactly-Once 重試去重</button>
-          <button id="scenarioSchema" class="ghost">用例 11：Schema Evolution 相容降級</button>
-          <button id="scenarioHotPartition" class="ghost">用例 12：Hot Partition / Skew 壓力</button>
+        <div class="panel side-block">
+          <h2>Load Generator</h2>
+          <div class="section-copy">模擬 producer rate、burst 與 consumer throughput，觀察 queue depth、lag 與 error ratio 如何演變。</div>
+          <div class="controls">
+            <div class="row2">
+              <label>事件速率（每秒）
+                <input id="genRate" type="number" min="1" max="200" value="18" />
+              </label>
+              <label>Burst 倍數
+                <input id="genBurst" type="number" min="1" max="10" value="2" />
+              </label>
+            </div>
+            <div class="row2">
+              <label>故障率（%）
+                <input id="genFault" type="number" min="0" max="100" value="15" />
+              </label>
+              <label>Consumer 吞吐（每秒）
+                <input id="consumerRate" type="number" min="1" max="200" value="12" />
+              </label>
+            </div>
+            <div class="row2">
+              <button id="toggleGenerator" class="primary">啟動隨機流</button>
+              <button id="injectSurge" class="ghost">注入事件尖峰</button>
+            </div>
+            <div class="hint">隨機流會混合 market、order、cancel、security deny、schema drift、poison pill、restart 事件。</div>
+          </div>
         </div>
 
-        <div class="metrics">
+        <div class="panel side-block">
+          <h2>Senior Kafka Drills</h2>
+          <div class="section-copy">按鈕對應真實 Kafka 維運 case，讓畫面直接進入異常或恢復場景，不只是做數字變化。</div>
+          <div class="usecases">
+            <button id="scenarioStream" class="ghost">用例 1：即時行情串流 + 正規化</button>
+            <button id="scenarioIdem" class="ghost">用例 2：Idempotency / Duplicate 防重</button>
+            <button id="scenarioRiskReject" class="ghost">用例 3：Risk Reject</button>
+            <button id="scenarioDlqReplay" class="ghost">用例 4：DLQ + Replay</button>
+            <button id="scenarioRestart" class="ghost">用例 5：Consumer Restart 恢復</button>
+            <button id="scenarioSecurity" class="ghost">用例 6：存取控制 / Security Deny</button>
+            <button id="scenarioOutOfOrder" class="ghost">用例 7：Out-of-Order Tick（丟棄舊序列）</button>
+            <button id="scenarioPoisonPill" class="ghost">用例 8：Poison Pill -> DLQ（不中斷消費）</button>
+            <button id="scenarioRebalanceStorm" class="ghost">用例 9：Consumer Rebalance Storm</button>
+            <button id="scenarioEos" class="ghost">用例 10：Exactly-Once 重試去重</button>
+            <button id="scenarioSchema" class="ghost">用例 11：Schema Evolution 相容降級</button>
+            <button id="scenarioHotPartition" class="ghost">用例 12：Hot Partition / Skew 壓力</button>
+          </div>
+        </div>
+      </aside>
+
+      <main class="workspace">
+        <section class="metrics">
           <div class="metric"><div class="k">Orders</div><div class="v" id="mOrders">0</div></div>
           <div class="metric"><div class="k">Filled</div><div class="v" id="mFilled">0</div></div>
           <div class="metric"><div class="k">DLQ</div><div class="v" id="mDlq">0</div></div>
@@ -483,79 +891,162 @@
           <div class="metric"><div class="k">Generator</div><div class="v" id="mGenerator">OFF</div></div>
           <div class="metric"><div class="k">Hot Part%</div><div class="v" id="mHot">0%</div></div>
           <div class="metric"><div class="k">Rebalance</div><div class="v" id="mRebalance">0</div></div>
-        </div>
+        </section>
 
-        <h2 style="margin-top:6px;">技能證據指標</h2>
-        <div class="skills">
-          <div class="skill"><span>Duplicate 被阻擋</span><strong id="sDup">0</strong></div>
-          <div class="skill"><span>Consumer Restart 次數</span><strong id="sRestart">0</strong></div>
-          <div class="skill"><span>Security Deny 次數</span><strong id="sDenied">0</strong></div>
-          <div class="skill"><span>Replay 完成次數</span><strong id="sReplay">0</strong></div>
-          <div class="skill"><span>Out-of-Order 丟棄</span><strong id="sLateDrop">0</strong></div>
-          <div class="skill"><span>Poison Pill 隔離</span><strong id="sPoison">0</strong></div>
-          <div class="skill"><span>EOS Duplicate Skip</span><strong id="sEos">0</strong></div>
-          <div class="skill"><span>Schema Fallback 次數</span><strong id="sSchema">0</strong></div>
-          <div class="skill"><span>Hot Partition 告警</span><strong id="sHot">0</strong></div>
-        </div>
+        <section class="ops-grid">
+          <div class="panel">
+            <div class="section-head">
+              <div>
+                <h2>Cluster Topology</h2>
+                <p>三個 broker 形成 replication factor 3 的資料平面，下面保留 live packet routing，讓你看得出 producer、consumer group、DLQ 與 replay 的實際路徑。</p>
+              </div>
+            </div>
 
-        <h2 style="margin-top:8px;">事件流</h2>
-        <div class="stream" id="eventStream"></div>
-      </div>
+            <div class="broker-strip">
+              <div class="broker-card">
+                <div class="k">Broker 01</div>
+                <span class="v" id="broker1Status">Healthy</span>
+                <div class="s" id="broker1Meta">Leader share 33% | ISR 3/3</div>
+              </div>
+              <div class="broker-card">
+                <div class="k">Broker 02</div>
+                <span class="v" id="broker2Status">Healthy</span>
+                <div class="s" id="broker2Meta">Leader share 33% | ISR 3/3</div>
+              </div>
+              <div class="broker-card">
+                <div class="k">Broker 03</div>
+                <span class="v" id="broker3Status">Healthy</span>
+                <div class="s" id="broker3Meta">Leader share 34% | ISR 3/3</div>
+              </div>
+            </div>
 
-      <div class="panel">
-        <h2>Kafka Event Distribution & Orderflow</h2>
-        <div class="flow-wrap">
-          <div class="flow-stage" id="flowStage">
-            <div class="node" data-node="market-sim" style="left:26px; top:48px;"><div class="t">Producer</div><div class="n">Market Data Simulator</div></div>
-            <div class="node" data-node="normalizer" style="left:242px; top:48px;"><div class="t">Consumer + Producer</div><div class="n">Market Normalizer</div></div>
-            <div class="node" data-node="order-api" style="left:26px; top:260px;"><div class="t">API Gateway</div><div class="n">Order API</div></div>
-            <div class="node" data-node="risk" style="left:242px; top:260px;"><div class="t">Risk Engine</div><div class="n">Risk Service</div></div>
-            <div class="node" data-node="execution" style="left:470px; top:155px;"><div class="t">Matching</div><div class="n">Execution Service</div></div>
-            <div class="node" data-node="portfolio" style="left:700px; top:155px;"><div class="t">Ledger</div><div class="n">Portfolio Service</div></div>
-            <div class="node" data-node="query" style="left:928px; top:155px;"><div class="t">Projection</div><div class="n">Query Projector</div></div>
-            <div class="node" data-node="dlq" style="left:700px; top:350px;"><div class="t">Recovery</div><div class="n">DLQ + Replay</div></div>
+            <div class="flow-wrap">
+              <div class="flow-stage" id="flowStage">
+                <div class="node" data-node="market-sim" style="left:42px; top:126px;"><div class="t">Producer Clients</div><div class="n">Market Feed / External Producers</div></div>
+                <div class="node" data-node="order-api" style="left:42px; top:396px;"><div class="t">Ingress API</div><div class="n">Order API / ACL / Idempotency</div></div>
 
-            <div class="topic-chip" style="left:130px;top:16px;" id="count-market-raw">market.raw · 0</div>
-            <div class="topic-chip" style="left:354px;top:16px;" id="count-market-normalized">market.normalized · 0</div>
-            <div class="topic-chip" style="left:130px;top:228px;" id="count-order-commands">order.commands · 0</div>
-            <div class="topic-chip" style="left:354px;top:228px;" id="count-risk-accepted">risk.accepted · 0</div>
-            <div class="topic-chip" style="left:354px;top:260px;" id="count-risk-rejected">risk.rejected · 0</div>
-            <div class="topic-chip" style="left:582px;top:125px;" id="count-execution-events">execution.events · 0</div>
-            <div class="topic-chip" style="left:810px;top:125px;" id="count-portfolio-events">portfolio.events · 0</div>
-            <div class="topic-chip" style="left:36px;top:430px;" id="count-security-events">security.events · 0</div>
-            <div class="topic-chip" style="left:960px;top:430px;" id="count-consumer-events">consumer.events · 0</div>
-            <div class="topic-chip" style="left:810px;top:318px;" id="count-deadletter-events">deadletter.events · 0</div>
-            <div class="topic-chip" style="left:930px;top:318px;" id="count-replay-jobs">replay.jobs · 0</div>
+                <div class="node" data-node="normalizer" style="left:320px; top:126px;"><div class="t">Consumer Group</div><div class="n">market-normalizer-service</div></div>
+                <div class="node" data-node="risk" style="left:320px; top:396px;"><div class="t">Consumer Group</div><div class="n">risk-service / policy engine</div></div>
 
-            <div class="arrow" style="left:206px;top:84px;width:36px;"></div>
-            <div class="arrow" style="left:206px;top:296px;width:36px;"></div>
-            <div class="arrow" style="left:422px;top:84px;width:48px;transform:rotate(20deg);transform-origin:left center;"></div>
-            <div class="arrow" style="left:422px;top:296px;width:48px;transform:rotate(-20deg);transform-origin:left center;"></div>
-            <div class="arrow" style="left:650px;top:190px;width:50px;"></div>
-            <div class="arrow" style="left:880px;top:190px;width:50px;"></div>
-            <div class="arrow" style="left:560px;top:330px;width:140px;"></div>
-            <div class="arrow" style="left:880px;top:362px;width:48px;"></div>
-            <div class="arrow" style="left:206px;top:380px;width:494px;"></div>
+                <div class="node" data-node="execution" style="left:648px; top:248px;"><div class="t">Stateful Consumer</div><div class="n">execution-service / open orders</div></div>
+                <div class="node" data-node="portfolio" style="left:948px; top:196px;"><div class="t">Ledger Consumer</div><div class="n">portfolio-service / positions / cash</div></div>
+                <div class="node" data-node="query" style="left:1138px; top:362px;"><div class="t">Projection Layer</div><div class="n">query-projector / read models</div></div>
+                <div class="node" data-node="dlq" style="left:948px; top:470px;"><div class="t">Recovery Plane</div><div class="n">DLQ handler / replay runner</div></div>
+
+                <div class="topic-chip" style="left:42px;top:42px;" id="count-market-raw">market.raw · 0</div>
+                <div class="topic-chip" style="left:300px;top:42px;" id="count-market-normalized">market.normalized · 0</div>
+                <div class="topic-chip" style="left:42px;top:318px;" id="count-order-commands">order.commands · 0</div>
+                <div class="topic-chip" style="left:300px;top:318px;" id="count-risk-accepted">risk.accepted · 0</div>
+                <div class="topic-chip" style="left:300px;top:356px;" id="count-risk-rejected">risk.rejected · 0</div>
+                <div class="topic-chip" style="left:626px;top:188px;" id="count-execution-events">execution.events · 0</div>
+                <div class="topic-chip" style="left:920px;top:150px;" id="count-portfolio-events">portfolio.events · 0</div>
+                <div class="topic-chip" style="left:1046px;top:318px;" id="count-consumer-events">consumer.events · 0</div>
+                <div class="topic-chip" style="left:918px;top:424px;" id="count-deadletter-events">deadletter.events · 0</div>
+                <div class="topic-chip" style="left:1110px;top:424px;" id="count-replay-jobs">replay.jobs · 0</div>
+                <div class="topic-chip" style="left:64px;top:606px;" id="count-security-events">security.events · 0</div>
+
+                <div class="arrow" style="left:254px;top:170px;width:66px;"></div>
+                <div class="arrow" style="left:254px;top:440px;width:66px;"></div>
+                <div class="arrow" style="left:534px;top:170px;width:120px;transform:rotate(12deg);transform-origin:left center;"></div>
+                <div class="arrow" style="left:534px;top:438px;width:120px;transform:rotate(-14deg);transform-origin:left center;"></div>
+                <div class="arrow" style="left:858px;top:286px;width:92px;"></div>
+                <div class="arrow" style="left:1060px;top:468px;width:78px;"></div>
+                <div class="arrow" style="left:842px;top:558px;width:104px;"></div>
+                <div class="arrow" style="left:264px;top:612px;width:686px;"></div>
+              </div>
+            </div>
           </div>
-        </div>
 
-        <div class="tables">
-          <div>
-            <h2>Orders View</h2>
+          <div class="side-stack">
+            <div class="panel">
+              <div class="section-head">
+                <div>
+                  <h2>Consumer Groups</h2>
+                  <p>用 logical consumer group 的角度看 lag、狀態與追趕速度，而不是只看總事件數。</p>
+                </div>
+              </div>
+              <div class="group-list">
+                <div class="group-row"><span class="label">cg.market-normalizer</span><strong id="groupMarketLag">0 offsets | stable</strong></div>
+                <div class="group-row"><span class="label">cg.risk-service</span><strong id="groupRiskLag">0 offsets | stable</strong></div>
+                <div class="group-row"><span class="label">cg.execution-service</span><strong id="groupExecLag">0 offsets | stable</strong></div>
+                <div class="group-row"><span class="label">cg.query-projector</span><strong id="groupProjectionLag">0 offsets | stable</strong></div>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="section-head">
+                <div>
+                  <h2>Incident Runbook</h2>
+                  <p id="runbookHeadline">目前沒有 active incident，系統處於 observation mode。</p>
+                </div>
+              </div>
+              <div class="runbook-list">
+                <div class="runbook-step"><span class="label">T+10</span><strong id="runbook10">確認 lag、DLQ、ISR，先保資料不丟</strong></div>
+                <div class="runbook-step"><span class="label">T+30</span><strong id="runbook30">縮小 root cause 到 rebalance / schema / skew / poison pill</strong></div>
+                <div class="runbook-step"><span class="label">T+60</span><strong id="runbook60">replay、catch-up、驗證 read model 與 offsets</strong></div>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="section-head">
+                <div>
+                  <h2>Live Event Stream</h2>
+                  <p>最新 topic 活動、異常事件與恢復訊號會即時出現在這裡。</p>
+                </div>
+              </div>
+              <div class="stream" id="eventStream"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="tables">
+          <div class="panel table-panel">
+            <div class="section-head">
+              <div>
+                <h2>Orders View</h2>
+                <p>寫模型經過 risk 與 execution 後的最新訂單狀態。</p>
+              </div>
+            </div>
             <table>
               <thead><tr><th>Order ID</th><th>Acct</th><th>Sym</th><th>Side</th><th>Status</th></tr></thead>
               <tbody id="ordersBody"></tbody>
             </table>
           </div>
-          <div>
-            <h2>Positions / PnL</h2>
+
+          <div class="panel table-panel">
+            <div class="section-head">
+              <div>
+                <h2>Positions / PnL</h2>
+                <p>portfolio consumer 寫入後的當前部位與未實現損益。</p>
+              </div>
+            </div>
             <table>
               <thead><tr><th>Acct</th><th>Sym</th><th>Qty</th><th>Avg</th><th>UPnL</th></tr></thead>
               <tbody id="positionsBody"></tbody>
             </table>
           </div>
-        </div>
-      </div>
+
+          <div class="panel table-panel">
+            <div class="section-head">
+              <div>
+                <h2>Resilience Evidence</h2>
+                <p>面試或實戰裡，資深 Kafka 工程師會被要求能說清楚這些異常如何被偵測、隔離與恢復。</p>
+              </div>
+            </div>
+            <div class="skills">
+              <div class="skill"><span>Duplicate 被阻擋</span><strong id="sDup">0</strong></div>
+              <div class="skill"><span>Consumer Restart 次數</span><strong id="sRestart">0</strong></div>
+              <div class="skill"><span>Security Deny 次數</span><strong id="sDenied">0</strong></div>
+              <div class="skill"><span>Replay 完成次數</span><strong id="sReplay">0</strong></div>
+              <div class="skill"><span>Out-of-Order 丟棄</span><strong id="sLateDrop">0</strong></div>
+              <div class="skill"><span>Poison Pill 隔離</span><strong id="sPoison">0</strong></div>
+              <div class="skill"><span>EOS Duplicate Skip</span><strong id="sEos">0</strong></div>
+              <div class="skill"><span>Schema Fallback 次數</span><strong id="sSchema">0</strong></div>
+              <div class="skill"><span>Hot Partition 告警</span><strong id="sHot">0</strong></div>
+            </div>
+          </div>
+        </section>
+      </main>
     </div>
   </div>
 
@@ -671,6 +1162,26 @@
     eos: document.getElementById("sEos"),
     schema: document.getElementById("sSchema"),
     hot: document.getElementById("sHot"),
+  };
+
+  const opsEls = {
+    cluster: document.getElementById("clusterStateBadge"),
+    consumer: document.getElementById("cgStateBadge"),
+    runbook: document.getElementById("runbookStateBadge"),
+    broker1Status: document.getElementById("broker1Status"),
+    broker1Meta: document.getElementById("broker1Meta"),
+    broker2Status: document.getElementById("broker2Status"),
+    broker2Meta: document.getElementById("broker2Meta"),
+    broker3Status: document.getElementById("broker3Status"),
+    broker3Meta: document.getElementById("broker3Meta"),
+    groupMarketLag: document.getElementById("groupMarketLag"),
+    groupRiskLag: document.getElementById("groupRiskLag"),
+    groupExecLag: document.getElementById("groupExecLag"),
+    groupProjectionLag: document.getElementById("groupProjectionLag"),
+    runbookHeadline: document.getElementById("runbookHeadline"),
+    runbook10: document.getElementById("runbook10"),
+    runbook30: document.getElementById("runbook30"),
+    runbook60: document.getElementById("runbook60"),
   };
 
   const topicElMap = {
@@ -806,6 +1317,7 @@
     metricEls.hot.style.color = state.hotPartitionRatio >= 0.68 ? "#fca5a5" : "#a5f3fc";
     metricEls.rebalance.textContent = String(state.rebalanceCount);
     renderSkills();
+    renderOperationalPanels();
   }
 
   function renderSkills() {
@@ -818,6 +1330,100 @@
     skillEls.eos.textContent = String(state.eosDuplicateSkipCount);
     skillEls.schema.textContent = String(state.schemaFallbackCount);
     skillEls.hot.textContent = String(state.hotPartitionAlertCount);
+  }
+
+  function colorForState(level) {
+    if (level === "bad") return "#fca5a5";
+    if (level === "warn") return "#fde68a";
+    return "#86efac";
+  }
+
+  function partitionCounts() {
+    const counts = [0, 0, 0];
+    state.partitionWindow.forEach((partition) => {
+      counts[partition] += 1;
+    });
+    return counts;
+  }
+
+  function renderOperationalPanels() {
+    const queue = state.kafkaQueue.length;
+    const lag = state.generator.lagMs;
+    const activeRebalance = Date.now() < state.consumerPausedUntil;
+    const activeExecutionPause = Date.now() < state.executionPausedUntil;
+    const partitionLoad = partitionCounts();
+    const totalPartitions = partitionLoad.reduce((sum, n) => sum + n, 0) || 1;
+
+    const clusterMode = queue > 55 || state.generator.errorRate > 0.18 || state.dlq.length > 8
+      ? { label: "DEGRADED", tone: "bad" }
+      : activeRebalance || lag > 1200 || state.hotPartitionRatio >= 0.68
+        ? { label: "WATCH", tone: "warn" }
+        : { label: "HEALTHY", tone: "good" };
+
+    const consumerMode = activeRebalance
+      ? { label: "REBALANCING", tone: "warn" }
+      : lag > 900 || queue > 18
+        ? { label: "CATCHING UP", tone: "warn" }
+        : { label: "STABLE", tone: "good" };
+
+    let incidentMode = { label: "OBSERVE", tone: "good" };
+    let headline = "目前沒有 active incident，系統處於 observation mode。";
+    let step10 = "確認 lag、DLQ、ISR，先保資料不丟";
+    let step30 = "縮小 root cause 到 rebalance / schema / skew / poison pill";
+    let step60 = "replay、catch-up、驗證 read model 與 offsets";
+
+    if (state.dlq.length > 0 || state.poisonPillCount > 0) {
+      incidentMode = { label: "DLQ ACTIVE", tone: "bad" };
+      headline = "發生 poison pill 或 processing failure，先隔離壞訊息並保持 consumer 持續前進。";
+      step10 = "鎖定壞 payload，停止無限 retry，確認 consumer 沒有卡死";
+      step30 = "檢查 schema / parser / downstream contract，建立 replay 邊界";
+      step60 = "對 DLQ 執行回放並核對 read model、positions、pnl 是否回補完成";
+    } else if (activeRebalance || state.rebalanceCount > 0) {
+      incidentMode = { label: "REBALANCE", tone: "warn" };
+      headline = "consumer group 正在 rebalance 或剛恢復，先接受短期 lag，再確認 offsets 是否持續前進。";
+      step10 = "凍結不必要 deploy，確認 group member 是否持續震盪";
+      step30 = "定位是 member churn、session timeout、metadata update 還是 coordinator 問題";
+      step60 = "觀察 lag 回落、commit 恢復與 duplicate side effect 是否被抑制";
+    } else if (state.hotPartitionRatio >= 0.68 || state.hotPartitionAlertCount > 0) {
+      incidentMode = { label: "HOT PARTITION", tone: "warn" };
+      headline = "partition skew 正在推高單一 leader 壓力，吞吐開始偏斜。";
+      step10 = "確認是 key skew 還是 producer burst，避免盲目加 consumer";
+      step30 = "重新檢查 key design、partition count 與 batching 策略";
+      step60 = "驗證新分佈是否打散，並確認 lag 與 broker leader share 回復正常";
+    }
+
+    opsEls.cluster.textContent = clusterMode.label;
+    opsEls.cluster.style.color = colorForState(clusterMode.tone);
+    opsEls.consumer.textContent = consumerMode.label;
+    opsEls.consumer.style.color = colorForState(consumerMode.tone);
+    opsEls.runbook.textContent = incidentMode.label;
+    opsEls.runbook.style.color = colorForState(incidentMode.tone);
+
+    [opsEls.broker1Status, opsEls.broker2Status, opsEls.broker3Status].forEach((el, idx) => {
+      const share = Math.round((partitionLoad[idx] / totalPartitions) * 100);
+      const hotspot = share >= 55 || (idx === 1 && state.hotPartitionRatio >= 0.68);
+      const status = hotspot ? "Leader Hot" : clusterMode.tone === "bad" ? "Under Pressure" : "Healthy";
+      const tone = hotspot ? "warn" : clusterMode.tone;
+      el.textContent = status;
+      el.style.color = colorForState(tone);
+      const meta = `Leader share ${share}% | ISR 3/3${activeRebalance ? " | rebalance watch" : ""}`;
+      [opsEls.broker1Meta, opsEls.broker2Meta, opsEls.broker3Meta][idx].textContent = meta;
+    });
+
+    const marketLag = Math.round(queue * 0.25);
+    const riskLag = Math.round(queue * 0.45 + state.dlq.length * 2);
+    const execLag = Math.round(queue * (activeExecutionPause ? 0.9 : 0.35) + (activeExecutionPause ? 12 : 0));
+    const projectionLag = Math.round(queue * 0.28 + state.replayDoneCount);
+
+    opsEls.groupMarketLag.textContent = `${marketLag} offsets | ${lag > 800 ? "warming" : "stable"}`;
+    opsEls.groupRiskLag.textContent = `${riskLag} offsets | ${state.dlq.length > 0 ? "screening" : "stable"}`;
+    opsEls.groupExecLag.textContent = `${execLag} offsets | ${activeExecutionPause ? "paused" : "processing"}`;
+    opsEls.groupProjectionLag.textContent = `${projectionLag} offsets | ${activeRebalance ? "catch-up" : "projecting"}`;
+
+    opsEls.runbookHeadline.textContent = headline;
+    opsEls.runbook10.textContent = step10;
+    opsEls.runbook30.textContent = step30;
+    opsEls.runbook60.textContent = step60;
   }
 
   function renderOrders() {
