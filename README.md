@@ -24,6 +24,34 @@
 
 註：Docker Space 內是單容器啟動（Kafka + Postgres + workers + APIs 全部同機）；若要正式生產高可用，再改多服務拓撲。
 
+## Alternative：Simulation Backend（免 Kafka/Postgres）
+
+如果你不想依賴任何付費/外部基礎設施，可直接跑模擬後端。  
+這個模式仍採用 Kafka 概念（topic、producer、consumer、event envelope、DLQ/replay），但 broker 與資料庫皆為 in-memory 模擬。
+
+啟動：
+
+```bash
+PYTHONPATH=src python3 -m kafka_demo.entrypoints.sim_server
+```
+
+預設入口：
+- `http://localhost:8080/` Dashboard
+- `POST /orders`
+- `POST /orders/{id}/cancel`
+- `GET /dashboard`
+- `GET /views/orders`
+- `GET /views/positions`
+- `GET /views/pnl`
+- `POST /replay/jobs`
+- `POST /replay/deadletters/{id}`
+
+可調整埠：
+
+```bash
+PORT=7860 PYTHONPATH=src python3 -m kafka_demo.entrypoints.sim_server
+```
+
 ## Cloud Hosting（Render，需付費）
 
 若你之後接受付費部署，repo 也保留了 `render.yaml`：
