@@ -23,6 +23,12 @@ Kafka 技能用例（一鍵場景）：
 - 用例 4：DLQ + Replay（故障回復）
 - 用例 5：Consumer Restart 恢復（可觀察事件持續與補處理）
 - 用例 6：Security Deny（用戶存取控制）
+- 用例 7：Out-of-Order Tick（序列檢查，丟棄舊事件）
+- 用例 8：Poison Pill -> DLQ（消費不中斷）
+- 用例 9：Rebalance Storm（觀察 lag 暴增與回補）
+- 用例 10：Exactly-Once 重試去重（envelope id）
+- 用例 11：Schema Evolution 相容降級（v2 -> v1 fallback）
+- 用例 12：Hot Partition / Skew 壓力（分區熱點告警）
 
 ## Cloud Hosting（免費、免信用卡）
 

@@ -460,6 +460,12 @@
           <button id="scenarioDlqReplay" class="ghost">用例 4：DLQ + Replay</button>
           <button id="scenarioRestart" class="ghost">用例 5：Consumer Restart 恢復</button>
           <button id="scenarioSecurity" class="ghost">用例 6：存取控制 / Security Deny</button>
+          <button id="scenarioOutOfOrder" class="ghost">用例 7：Out-of-Order Tick（丟棄舊序列）</button>
+          <button id="scenarioPoisonPill" class="ghost">用例 8：Poison Pill -> DLQ（不中斷消費）</button>
+          <button id="scenarioRebalanceStorm" class="ghost">用例 9：Consumer Rebalance Storm</button>
+          <button id="scenarioEos" class="ghost">用例 10：Exactly-Once 重試去重</button>
+          <button id="scenarioSchema" class="ghost">用例 11：Schema Evolution 相容降級</button>
+          <button id="scenarioHotPartition" class="ghost">用例 12：Hot Partition / Skew 壓力</button>
         </div>
 
         <div class="metrics">
@@ -475,6 +481,8 @@
           <div class="metric"><div class="k">Consume/s</div><div class="v" id="mConsume">0</div></div>
           <div class="metric"><div class="k">Error %</div><div class="v" id="mErrRate">0</div></div>
           <div class="metric"><div class="k">Generator</div><div class="v" id="mGenerator">OFF</div></div>
+          <div class="metric"><div class="k">Hot Part%</div><div class="v" id="mHot">0%</div></div>
+          <div class="metric"><div class="k">Rebalance</div><div class="v" id="mRebalance">0</div></div>
         </div>
 
         <h2 style="margin-top:6px;">技能證據指標</h2>
@@ -483,6 +491,11 @@
           <div class="skill"><span>Consumer Restart 次數</span><strong id="sRestart">0</strong></div>
           <div class="skill"><span>Security Deny 次數</span><strong id="sDenied">0</strong></div>
           <div class="skill"><span>Replay 完成次數</span><strong id="sReplay">0</strong></div>
+          <div class="skill"><span>Out-of-Order 丟棄</span><strong id="sLateDrop">0</strong></div>
+          <div class="skill"><span>Poison Pill 隔離</span><strong id="sPoison">0</strong></div>
+          <div class="skill"><span>EOS Duplicate Skip</span><strong id="sEos">0</strong></div>
+          <div class="skill"><span>Schema Fallback 次數</span><strong id="sSchema">0</strong></div>
+          <div class="skill"><span>Hot Partition 告警</span><strong id="sHot">0</strong></div>
         </div>
 
         <h2 style="margin-top:8px;">事件流</h2>
@@ -589,7 +602,24 @@
     replayDoneCount: 0,
     blockedAccounts: new Set(["ACC-002"]),
     executionPausedUntil: 0,
+    consumerPausedUntil: 0,
     kafkaQueue: [],
+    processedEnvelopeIds: {},
+    quoteSeq: {
+      AAPL: 0,
+      MSFT: 0,
+      TSLA: 0,
+      NVDA: 0,
+    },
+    partitionWindow: [],
+    hotPartitionRatio: 0,
+    lastHotAlertAt: 0,
+    lateTickDroppedCount: 0,
+    poisonPillCount: 0,
+    rebalanceCount: 0,
+    eosDuplicateSkipCount: 0,
+    schemaFallbackCount: 0,
+    hotPartitionAlertCount: 0,
     generator: {
       running: false,
       producerRate: 18,
@@ -627,6 +657,8 @@
     consume: document.getElementById("mConsume"),
     error: document.getElementById("mErrRate"),
     generator: document.getElementById("mGenerator"),
+    hot: document.getElementById("mHot"),
+    rebalance: document.getElementById("mRebalance"),
   };
 
   const skillEls = {
@@ -634,6 +666,11 @@
     restart: document.getElementById("sRestart"),
     denied: document.getElementById("sDenied"),
     replay: document.getElementById("sReplay"),
+    lateDrop: document.getElementById("sLateDrop"),
+    poison: document.getElementById("sPoison"),
+    eos: document.getElementById("sEos"),
+    schema: document.getElementById("sSchema"),
+    hot: document.getElementById("sHot"),
   };
 
   const topicElMap = {
@@ -656,6 +693,44 @@
 
   function randomPick(arr) {
     return arr[Math.floor(Math.random() * arr.length)];
+  }
+
+  function partitionForKey(key) {
+    const str = String(key || "default");
+    let hash = 0;
+    for (let i = 0; i < str.length; i += 1) hash = (hash * 31 + str.charCodeAt(i)) >>> 0;
+    return hash % 3;
+  }
+
+  function recordPartitionLoad(key) {
+    const partition = partitionForKey(key);
+    state.partitionWindow.push(partition);
+    while (state.partitionWindow.length > 120) state.partitionWindow.shift();
+
+    if (state.partitionWindow.length === 0) {
+      state.hotPartitionRatio = 0;
+      return;
+    }
+
+    const counts = [0, 0, 0];
+    state.partitionWindow.forEach((p) => { counts[p] += 1; });
+    const maxCount = Math.max(...counts);
+    const ratio = maxCount / state.partitionWindow.length;
+    state.hotPartitionRatio = ratio;
+
+    if (state.partitionWindow.length >= 36 && ratio >= 0.68 && (Date.now() - state.lastHotAlertAt) > 9000) {
+      state.hotPartitionAlertCount += 1;
+      state.lastHotAlertAt = Date.now();
+      emit("consumer.events", "partition.hotspot.detected", `p${counts.indexOf(maxCount)} ${(ratio * 100).toFixed(0)}% load`);
+    }
+  }
+
+  function pruneEnvelopeCache() {
+    const keys = Object.keys(state.processedEnvelopeIds);
+    if (keys.length < 3000) return;
+    const sorted = keys.sort((a, b) => state.processedEnvelopeIds[a] - state.processedEnvelopeIds[b]);
+    const drop = sorted.slice(0, 800);
+    drop.forEach((k) => { delete state.processedEnvelopeIds[k]; });
   }
 
   function idForOrder() {
@@ -727,6 +802,9 @@
     metricEls.error.textContent = `${(state.generator.errorRate * 100).toFixed(1)}%`;
     metricEls.generator.textContent = state.generator.running ? "ON" : "OFF";
     metricEls.generator.style.color = state.generator.running ? "#86efac" : "#fda4af";
+    metricEls.hot.textContent = `${(state.hotPartitionRatio * 100).toFixed(0)}%`;
+    metricEls.hot.style.color = state.hotPartitionRatio >= 0.68 ? "#fca5a5" : "#a5f3fc";
+    metricEls.rebalance.textContent = String(state.rebalanceCount);
     renderSkills();
   }
 
@@ -735,6 +813,11 @@
     skillEls.restart.textContent = String(state.consumerRestartCount);
     skillEls.denied.textContent = String(state.securityDeniedCount);
     skillEls.replay.textContent = String(state.replayDoneCount);
+    skillEls.lateDrop.textContent = String(state.lateTickDroppedCount);
+    skillEls.poison.textContent = String(state.poisonPillCount);
+    skillEls.eos.textContent = String(state.eosDuplicateSkipCount);
+    skillEls.schema.textContent = String(state.schemaFallbackCount);
+    skillEls.hot.textContent = String(state.hotPartitionAlertCount);
   }
 
   function renderOrders() {
@@ -834,6 +917,29 @@
     renderPositions();
   }
 
+  function applyNormalizedTick(symbol, bid, ask, seq, source = "live") {
+    const currentSeq = state.quoteSeq[symbol] || 0;
+    if (seq <= currentSeq) {
+      state.lateTickDroppedCount += 1;
+      emit("consumer.events", "market.tick.stale.dropped", `${symbol} seq=${seq} < current=${currentSeq} (${source})`);
+      renderMetrics();
+      return false;
+    }
+
+    state.quoteSeq[symbol] = seq;
+    state.quotes[symbol].bid = Number(bid.toFixed(2));
+    state.quotes[symbol].ask = Number(ask.toFixed(2));
+    recordPartitionLoad(symbol);
+
+    emit("market.normalized", "market.tick.normalized", `${symbol} ${bid.toFixed(2)}/${ask.toFixed(2)} seq=${seq}`);
+    state.orders.filter((o) => o.symbol === symbol && o.status === "OPEN").forEach(tryFill);
+    markPnl(symbol);
+    renderOrders();
+    renderPositions();
+    renderMetrics();
+    return true;
+  }
+
   function isExecutionPaused() {
     return Date.now() < state.executionPausedUntil;
   }
@@ -868,6 +974,7 @@
 
     if (state.blockedAccounts.has(accountId)) {
       state.securityDeniedCount += 1;
+      recordPartitionLoad(accountId);
       emit("security.events", "security.access.denied", `${accountId} denied by ACL`);
       const dead = { id: `DLQ-${Date.now()}`, payload: { accountId, symbol, side, qty, price }, from: "order-api" };
       state.dlq.push(dead);
@@ -887,6 +994,7 @@
     const order = { orderId: idForOrder(), accountId, symbol, side, qty, price, status: "PENDING_RISK", idem: idempotencyKey };
     state.orders.push(order);
     if (idempotencyKey) state.idempotencyCache[idempotencyKey] = order;
+    recordPartitionLoad(`${accountId}:${symbol}`);
 
     emit("order.commands", "order.new.requested", `${order.orderId} ${side} ${symbol} x${qty}`);
 
@@ -977,10 +1085,10 @@
     });
   }
 
-  function marketTick(force = false) {
+  function marketTick(force = false, forcedSymbol = "") {
     if (!state.runningFeed && !force) return;
     const symbols = Object.keys(state.quotes);
-    const symbol = symbols[Math.floor(Math.random() * symbols.length)];
+    const symbol = forcedSymbol || symbols[Math.floor(Math.random() * symbols.length)];
     const q = state.quotes[symbol];
     const drift = (Math.random() - 0.5) * 0.8;
     const mid = Math.max(1, ((q.bid + q.ask) / 2) + drift);
@@ -989,13 +1097,9 @@
     q.ask = Number((mid + 0.1).toFixed(2));
 
     emit("market.raw", "market.tick.raw", `${symbol} ${q.bid}/${q.ask}`);
+    const nextSeq = (state.quoteSeq[symbol] || 0) + 1;
     setTimeout(() => {
-      emit("market.normalized", "market.tick.normalized", `${symbol} ${q.bid}/${q.ask}`);
-      state.orders.filter(o => o.symbol === symbol && o.status === "OPEN").forEach(tryFill);
-      markPnl(symbol);
-      renderOrders();
-      renderPositions();
-      renderMetrics();
+      applyNormalizedTick(symbol, q.bid, q.ask, nextSeq);
     }, 120);
   }
 
@@ -1028,11 +1132,13 @@
     return { accountId, symbol, side, qty, price };
   }
 
-  function enqueueKafkaEvent(kind, payload = {}, failed = false) {
+  function enqueueKafkaEvent(kind, payload = {}, failed = false, envelopeId = "", partitionKey = "") {
     state.kafkaQueue.push({
       id: `Q-${Date.now()}-${Math.random().toString(16).slice(2, 7)}`,
       kind,
       payload,
+      envelopeId,
+      partitionKey,
       enqueuedAt: Date.now(),
     });
     state.generator.producedWindow += 1;
@@ -1041,33 +1147,66 @@
 
   function enqueueRandomEvent() {
     const r = Math.random();
-    if (r < 0.34) {
-      enqueueKafkaEvent("market");
+    if (r < 0.28) {
+      const symbol = randomPick(Object.keys(state.quotes));
+      enqueueKafkaEvent("market", { symbol });
+      return;
+    }
+    if (r < 0.62) {
+      const forceFault = Math.random() < state.generator.faultRate;
+      const order = randomOrderPayload();
+      enqueueKafkaEvent(forceFault ? "order_fault" : "order", order, forceFault, "", `${order.accountId}:${order.symbol}`);
       return;
     }
     if (r < 0.74) {
-      const forceFault = Math.random() < state.generator.faultRate;
-      enqueueKafkaEvent(forceFault ? "order_fault" : "order", randomOrderPayload(), forceFault);
-      return;
-    }
-    if (r < 0.84) {
       enqueueKafkaEvent("cancel");
       return;
     }
-    if (r < 0.93) {
-      enqueueKafkaEvent("security", randomOrderPayload("ACC-002"), true);
+    if (r < 0.83) {
+      const instrument = randomPick(Object.keys(state.quotes));
+      const schemaV2 = {
+        schema: "order.v2",
+        acct: "ACC-001",
+        instrument,
+        direction: Math.random() < 0.5 ? "BUY" : "SELL",
+        size: Math.floor(Math.random() * 5) + 1,
+        limit_price: Number((state.quotes[instrument].ask + (Math.random() * 0.4)).toFixed(2)),
+      };
+      enqueueKafkaEvent("schema_v2_order", schemaV2, false, "", `${schemaV2.acct}:${schemaV2.instrument}`);
+      return;
+    }
+    if (r < 0.91) {
+      const denied = randomOrderPayload("ACC-002");
+      enqueueKafkaEvent("security", denied, true, "", `${denied.accountId}:${denied.symbol}`);
+      return;
+    }
+    if (r < 0.96) {
+      enqueueKafkaEvent("poison", { raw: "{ bad_json_payload: true " }, true, "", "poison");
       return;
     }
     enqueueKafkaEvent("restart");
   }
 
   function processQueuedEvent(event) {
+    if (event.envelopeId) {
+      if (state.processedEnvelopeIds[event.envelopeId]) {
+        state.eosDuplicateSkipCount += 1;
+        emit("consumer.events", "eos.duplicate.skipped", `${event.envelopeId}`);
+        renderMetrics();
+        return;
+      }
+      state.processedEnvelopeIds[event.envelopeId] = Date.now();
+      pruneEnvelopeCache();
+    }
+
+    if (event.partitionKey) recordPartitionLoad(event.partitionKey);
+
     const lag = Date.now() - event.enqueuedAt;
     state.generator.lagMs = state.generator.lagMs === 0 ? lag : ((state.generator.lagMs * 0.7) + (lag * 0.3));
     state.generator.consumedWindow += 1;
 
     if (event.kind === "market") {
-      marketTick(true);
+      marketTick(true, event.payload?.symbol || "");
       return;
     }
     if (event.kind === "order") {
@@ -1084,6 +1223,34 @@
     }
     if (event.kind === "security") {
       createOrder({ ...event.payload, accountId: "ACC-002", idempotencyKey: "" });
+      return;
+    }
+    if (event.kind === "schema_v2_order") {
+      state.schemaFallbackCount += 1;
+      const v2 = event.payload || {};
+      const mapped = {
+        accountId: v2.acct || "ACC-001",
+        symbol: v2.instrument || "AAPL",
+        side: v2.direction || "BUY",
+        qty: Number(v2.size || 1),
+        price: Number(v2.limit_price || state.quotes.AAPL.ask),
+      };
+      emit("consumer.events", "schema.v2.fallback", `${v2.schema || "order.v2"} -> order.v1`);
+      createOrder({ ...mapped, idempotencyKey: "" });
+      renderMetrics();
+      return;
+    }
+    if (event.kind === "poison") {
+      state.poisonPillCount += 1;
+      const dead = {
+        id: `DLQ-${Date.now()}`,
+        payload: { malformed: true, raw: event.payload?.raw || "<invalid>" },
+        from: "normalizer",
+      };
+      state.dlq.push(dead);
+      emit("deadletter.events", "deadletter.poison_pill", `${dead.id} isolated`, { from: dead.from });
+      emit("consumer.events", "consumer.skip.poison", "malformed payload quarantined");
+      renderMetrics();
       return;
     }
     if (event.kind === "restart") {
@@ -1108,7 +1275,25 @@
     renderMetrics();
   }
 
+  function simulateRebalance(durationMs, reason = "consumer.group.rebalance") {
+    state.rebalanceCount += 1;
+    state.consumerPausedUntil = Math.max(state.consumerPausedUntil, Date.now() + durationMs);
+    emit("consumer.events", "consumer.rebalance.begin", `${reason} pause=${durationMs}ms`);
+    setTimeout(() => {
+      emit("consumer.events", "consumer.rebalance.done", `${reason} resumed`);
+      renderMetrics();
+    }, durationMs + 50);
+  }
+
   function consumerTick() {
+    if (Date.now() < state.consumerPausedUntil) {
+      if (state.kafkaQueue.length > 0) {
+        state.generator.lagMs = Date.now() - state.kafkaQueue[0].enqueuedAt;
+      }
+      renderMetrics();
+      return;
+    }
+
     state.generator.consumerCarry += state.generator.consumerRate * 0.2;
     let consumeCount = Math.floor(state.generator.consumerCarry);
     state.generator.consumerCarry -= consumeCount;
@@ -1191,6 +1376,7 @@
   function scenarioConsumerRestart() {
     state.consumerRestartCount += 1;
     state.executionPausedUntil = Date.now() + 3800;
+    state.consumerPausedUntil = Math.max(state.consumerPausedUntil, Date.now() + 2200);
     emit("consumer.events", "consumer.restart.begin", "execution-service restarting...");
     createOrder({ symbol: "AAPL", side: "BUY", qty: 6, price: state.quotes.AAPL.ask + 0.3 });
     setTimeout(() => {
@@ -1207,6 +1393,92 @@
     createOrder({ accountId: "ACC-002", symbol: "AAPL", side: "BUY", qty: 2, price: state.quotes.AAPL.ask + 0.2 });
   }
 
+  function scenarioOutOfOrder() {
+    pushEvent("market.normalized", "scenario", "Use Case 7: out-of-order tick arrives late");
+    const symbol = "AAPL";
+    const q = state.quotes[symbol];
+    const base = state.quoteSeq[symbol] || 0;
+    const freshBid = q.bid + 0.35;
+    const freshAsk = q.ask + 0.35;
+    const staleBid = q.bid - 0.4;
+    const staleAsk = q.ask - 0.4;
+
+    emit("market.raw", "market.tick.raw", `${symbol} seq=${base + 2} (newer)`);
+    setTimeout(() => applyNormalizedTick(symbol, freshBid, freshAsk, base + 2, "out-of-order-new"), 120);
+    setTimeout(() => {
+      emit("market.raw", "market.tick.raw", `${symbol} seq=${base + 1} (older arrives late)`);
+      applyNormalizedTick(symbol, staleBid, staleAsk, base + 1, "out-of-order-old");
+    }, 280);
+  }
+
+  function scenarioPoisonPill() {
+    pushEvent("deadletter.events", "scenario", "Use Case 8: poison pill isolation with consumer continue");
+    for (let i = 0; i < 3; i += 1) {
+      enqueueKafkaEvent("poison", { raw: "{ malformed_event: true " }, true, `poison-${Date.now()}-${i}`, "poison");
+    }
+    const recovery = randomOrderPayload("ACC-001");
+    enqueueKafkaEvent("order", recovery, false, `poison-recovery-${Date.now()}`, `${recovery.accountId}:${recovery.symbol}`);
+    renderMetrics();
+  }
+
+  function scenarioRebalanceStorm() {
+    pushEvent("consumer.events", "scenario", "Use Case 9: rebalance storm, lag spike then catch up");
+    for (let i = 0; i < 26; i += 1) {
+      const order = randomOrderPayload("ACC-001");
+      enqueueKafkaEvent("order", order, false, `storm-${Date.now()}-${i}`, `${order.accountId}:${order.symbol}`);
+    }
+    simulateRebalance(1800, "join/new-member");
+    setTimeout(() => simulateRebalance(1600, "member-leave"), 1000);
+    setTimeout(() => simulateRebalance(1500, "topic-metadata-update"), 2000);
+    renderMetrics();
+  }
+
+  function scenarioExactlyOnce() {
+    pushEvent("consumer.events", "scenario", "Use Case 10: producer retry duplicate with EOS skip");
+    const order = randomOrderPayload("ACC-001");
+    const envId = `eos-env-${Date.now()}`;
+    enqueueKafkaEvent("order", order, false, envId, `${order.accountId}:${order.symbol}`);
+    setTimeout(() => enqueueKafkaEvent("order", order, false, envId, `${order.accountId}:${order.symbol}`), 120);
+    setTimeout(() => enqueueKafkaEvent("order", order, false, envId, `${order.accountId}:${order.symbol}`), 240);
+    renderMetrics();
+  }
+
+  function scenarioSchemaEvolution() {
+    pushEvent("consumer.events", "scenario", "Use Case 11: schema v2 event fallback to v1 handler");
+    const symbol = randomPick(Object.keys(state.quotes));
+    const schemaV2 = {
+      schema: "order.v2",
+      acct: "ACC-001",
+      instrument: symbol,
+      direction: "BUY",
+      size: 4,
+      limit_price: Number((state.quotes[symbol].ask + 0.25).toFixed(2)),
+      extra_new_field: { source: "new-producer" },
+    };
+    enqueueKafkaEvent("schema_v2_order", schemaV2, false, `schema-${Date.now()}`, `${schemaV2.acct}:${schemaV2.instrument}`);
+    renderMetrics();
+  }
+
+  function scenarioHotPartition() {
+    pushEvent("consumer.events", "scenario", "Use Case 12: hot partition skew on ACC-001:NVDA");
+    for (let i = 0; i < 54; i += 1) {
+      const price = Number((state.quotes.NVDA.ask + (Math.random() * 0.3)).toFixed(2));
+      const qty = Math.floor(Math.random() * 5) + 1;
+      enqueueKafkaEvent(
+        "order",
+        { accountId: "ACC-001", symbol: "NVDA", side: "BUY", qty, price },
+        false,
+        `hot-${Date.now()}-${i}`,
+        "ACC-001:NVDA"
+      );
+    }
+    for (let i = 0; i < 8; i += 1) {
+      const other = randomOrderPayload("ACC-001");
+      enqueueKafkaEvent("order", other, false, `hot-mix-${Date.now()}-${i}`, `${other.accountId}:${other.symbol}`);
+    }
+    renderMetrics();
+  }
+
   document.getElementById("sendOrder").addEventListener("click", createOrder);
   document.getElementById("cancelLast").addEventListener("click", cancelLastOpenOrder);
   document.getElementById("replayDlq").addEventListener("click", replayDlq);
@@ -1216,6 +1488,12 @@
   document.getElementById("scenarioDlqReplay").addEventListener("click", scenarioDlqReplay);
   document.getElementById("scenarioRestart").addEventListener("click", scenarioConsumerRestart);
   document.getElementById("scenarioSecurity").addEventListener("click", scenarioSecurity);
+  document.getElementById("scenarioOutOfOrder").addEventListener("click", scenarioOutOfOrder);
+  document.getElementById("scenarioPoisonPill").addEventListener("click", scenarioPoisonPill);
+  document.getElementById("scenarioRebalanceStorm").addEventListener("click", scenarioRebalanceStorm);
+  document.getElementById("scenarioEos").addEventListener("click", scenarioExactlyOnce);
+  document.getElementById("scenarioSchema").addEventListener("click", scenarioSchemaEvolution);
+  document.getElementById("scenarioHotPartition").addEventListener("click", scenarioHotPartition);
   document.getElementById("toggleGenerator").addEventListener("click", toggleGenerator);
   document.getElementById("injectSurge").addEventListener("click", injectSurge);
   ["genRate", "genBurst", "genFault", "consumerRate"].forEach((id) => {
